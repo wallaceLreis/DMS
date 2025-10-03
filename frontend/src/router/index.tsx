@@ -7,6 +7,7 @@ import { HomePage } from '../pages/HomePage';
 import { GenericScreenPage } from '../pages/GenericScreenPage';
 import { useAuth } from '../contexts/AuthContext';
 import { MainLayout } from '../layouts/MainLayout';
+import { AcessosPage } from '../pages/AcessosPage';
 
 const ProtectedRoute = () => {
   const { token } = useAuth();
@@ -22,8 +23,8 @@ export const router = createBrowserRouter([
         { path: '/', element: <Navigate to="/inicio" replace /> },
         { path: 'inicio', element: <HomePage /> },
         { path: 'dicionario', element: <DicionarioPage /> },
-        { path: 'usuarios', element: <UsuariosPage /> }, // <-- USE O NOVO COMPONENTE
-        { path: 'acessos', element: <div>Tela de Acessos (em construção)</div> }, // <-- ROTA ADICIONADA
+        { path: 'usuarios', element: <UsuariosPage /> },
+        { path: 'acessos', element: <AcessosPage /> },
         { path: 'tela/:tableName', element: <GenericScreenPage /> },
     ]
   },

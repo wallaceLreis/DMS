@@ -1,12 +1,12 @@
 // backend/src/routes/dataRoutes.ts
 import { Router } from 'express';
 import { protect } from '../middleware/authMiddleware';
-import { getGenericData } from '../controllers/dataController';
+import { getGenericData, deleteGenericData } from '../controllers/dataController';
 
 const router = Router();
 router.use(protect);
 
-// Rota GET /api/data/:tableName
 router.get('/:tableName', getGenericData);
+router.delete('/:tableName/:id', deleteGenericData); // <-- NOVA ROTA
 
 export default router;
