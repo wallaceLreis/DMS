@@ -11,6 +11,7 @@ import dataRoutes from './routes/dataRoutes';
 import usuarioRoutes from './routes/usuarioRoutes';
 import acessoRoutes from './routes/acessoRoutes';
 import produtoRoutes from './routes/produtoRoutes';
+import estoqueRoutes from './routes/estoqueRoutes';
 
 // Configuração inicial
 dotenv.config();
@@ -32,7 +33,8 @@ app.use('/api/telas', telaRoutes);
 app.use('/api/data', dataRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/acessos', acessoRoutes);
-app.use('/api/produtos', produtoRoutes); // Nova rota de produtos
+app.use('/api/produtos', produtoRoutes);
+app.use('/api/estoque', estoqueRoutes);
 
 // Inicia o servidor
 app.listen(port, () => {
