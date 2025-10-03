@@ -1,18 +1,24 @@
 // src/routes/telaRoutes.ts
 import { Router } from 'express';
-import { getTelas, getTelaById } from '../controllers/telaController';
+import { getTelas, getTelaById, createTela, updateTela } from '../controllers/telaController';
 import { protect } from '../middleware/authMiddleware';
+import campoRoutes from './campoRoutes'; // Importa as rotas dos campos
 
 const router = Router();
 
-// Aplicamos o middleware 'protect' a todas as rotas deste arquivo
-// Apenas usuários com token válido poderão acessá-las
-router.use(protect);
+router.use(protect); // Protege todas as rotas abaixo
 
-// Rota: GET /api/telas
-router.get('/', getTelas);
+// Rotas para as telas
+router.route('/')
+  .get(getTelas)
+  .post(createTela);
 
-// Rota: GET /api/telas/:id
-router.get('/:id', getTelaById);
+router.route('/:id')
+  .get(getTelaById)
+  .put(updateTela);
+
+// Usa as rotas de campos aninhadas sob uma tela específica
+// Ex: /api/telas/1/campos
+router.use('/:telaId/campos', campoRoutes);
 
 export default router;
