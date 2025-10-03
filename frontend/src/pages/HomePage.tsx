@@ -1,70 +1,78 @@
-// src/pages/HomePage.tsx
 import { useEffect, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useTabs } from '../contexts/TabsContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-
-// IMPORTAÇÃO CORRETA DO GRID CLÁSSICO
-import Grid from '@mui/material/Grid';
 import { Card, CardActionArea, CardContent, Typography, Box } from '@mui/material';
 
-interface Tela {
-  tela_id: number;
-  titulo_tela: string;
-  nome_tabela: string;
+interface TelaDisponivel {
+    label: string;
+    value: string;
 }
 
 export const HomePage = () => {
-  const [telas, setTelas] = useState<Tela[]>([]);
-  const navigate = useNavigate();
+    const [telasDisponiveis, setTelasDisponiveis] = useState<TelaDisponivel[]>([]);
+    const { user } = useAuth();
+    const { addTab } = useTabs();
+    const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchTelas = async () => {
-      try {
-        const response = await api.get('/telas?ativo=true');
-        const allTelas = [
-          { tela_id: 9999, titulo_tela: 'Dicionário de Dados', nome_tabela: 'dicionario' },
-          { tela_id: 9998, titulo_tela: 'Usuários', nome_tabela: 'usuarios' },
-          ...response.data
-        ];
-        setTelas(allTelas);
-      } catch (error) {
-        console.error("Erro ao buscar telas:", error);
-      }
+    useEffect(() => {
+        const fetchMenu = async () => {
+            try {
+                const response = await api.get('/usuarios/me/menu');
+                const items: TelaDisponivel[] = response.data.map((tela: any) => ({
+                    label: tela.titulo_tela,
+                    value: `/tela/${tela.nome_tabela}`,
+                }));
+
+                if (user?.role === 'sup') {
+                    const baseScreens: TelaDisponivel[] = [
+                        { label: 'Dicionário de Dados', value: '/dicionario' },
+                        { label: 'Gestão de Usuários', value: '/usuarios' },
+                        { label: 'Gestão de Acessos', value: '/acessos' },
+                    ];
+                    // CORREÇÃO AQUI: Adiciona o tipo para 'apiItem'
+                    const filteredItems = items.filter((apiItem: TelaDisponivel) => 
+                        !baseScreens.some(baseItem => apiItem.value.includes(baseItem.value))
+                    );
+                    setTelasDisponiveis([...baseScreens, ...filteredItems]);
+                } else {
+                     setTelasDisponiveis(items);
+                }
+            } catch (error) {
+                console.error("Erro ao buscar telas disponíveis:", error);
+            }
+        };
+
+        if (user) {
+            fetchMenu();
+        }
+    }, [user]);
+
+    const handleOpenScreen = (tela: TelaDisponivel) => {
+        addTab(tela);
+        navigate(tela.value);
     };
-    fetchTelas();
-  }, []);
 
-  const handleCardClick = (tableName: string) => {
-    if (tableName === 'dicionario' || tableName === 'usuarios') {
-      navigate(`/${tableName}`);
-    } else {
-      navigate(`/tela/${tableName}`);
-    }
-  };
-
-  return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Bem-vindo ao DMS
-      </Typography>
-      <Typography variant="subtitle1" gutterBottom>
-        Selecione uma tela para começar:
-      </Typography>
-      <Grid container spacing={3} sx={{ mt: 2 }}>
-        {telas.map((tela) => (
-          <Grid item xs={12} sm={6} md={4} key={tela.tela_id}>
-            <Card>
-              <CardActionArea onClick={() => handleCardClick(tela.nome_tabela)}>
-                <CardContent>
-                  <Typography gutterBottom variant="h5" component="div">
-                    {tela.titulo_tela}
-                  </Typography>
-                </CardContent>
-              </CardActionArea>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-    </Box>
-  );
+    return (
+        <Box>
+            <Typography variant="h4" gutterBottom>Bem-vindo ao DMS</Typography>
+            <Typography variant="subtitle1" gutterBottom>Selecione uma tela para abrir:</Typography>
+            <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                {telasDisponiveis.map((tela) => (
+                    <Box key={tela.value} sx={{ width: { xs: '100%', sm: 'calc(50% - 12px)', md: 'calc(33.333% - 16px)' } }}>
+                        <Card sx={{ height: '100%' }}>
+                            <CardActionArea onClick={() => handleOpenScreen(tela)} sx={{ height: '100%' }}>
+                                <CardContent>
+                                    <Typography gutterBottom variant="h5" component="div">
+                                        {tela.label}
+                                    </Typography>
+                                </CardContent>
+                            </CardActionArea>
+                        </Card>
+                    </Box>
+                ))}
+            </Box>
+        </Box>
+    );
 };

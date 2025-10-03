@@ -1,13 +1,12 @@
-// frontend/src/router/index.tsx
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { LoginPage } from '../pages/LoginPage';
-import { DicionarioPage } from '../pages/DicionarioPage';
-import { UsuariosPage } from '../pages/UsuariosPage'; // <-- IMPORTE A NOVA TELA
 import { HomePage } from '../pages/HomePage';
 import { GenericScreenPage } from '../pages/GenericScreenPage';
 import { useAuth } from '../contexts/AuthContext';
 import { MainLayout } from '../layouts/MainLayout';
 import { AcessosPage } from '../pages/AcessosPage';
+import { DicionarioPage } from '../pages/DicionarioPage';
+import { UsuariosPage } from '../pages/UsuariosPage';
 
 const ProtectedRoute = () => {
   const { token } = useAuth();
@@ -15,7 +14,10 @@ const ProtectedRoute = () => {
 };
 
 export const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage /> },
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
   {
     path: '/',
     element: <ProtectedRoute />,

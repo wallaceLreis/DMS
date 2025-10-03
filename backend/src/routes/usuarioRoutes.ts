@@ -1,9 +1,12 @@
 import { Router } from 'express';
 import { protect } from '../middleware/authMiddleware';
-import { getUsuarios, createUsuario, deleteUsuario, changePassword } from '../controllers/usuarioController';
+import { getUsuarios, createUsuario, deleteUsuario, changePassword, getMenuForCurrentUser } from '../controllers/usuarioController';
 
 const router = Router();
 router.use(protect);
+
+// Rota para o menu do usuário logado (deve vir antes de /:id)
+router.get('/me/menu', getMenuForCurrentUser);
 
 // Rota para o usuário logado alterar a própria senha
 router.put('/change-password', changePassword);
