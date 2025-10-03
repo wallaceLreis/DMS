@@ -1,11 +1,19 @@
 import { Router } from 'express';
 import { protect } from '../middleware/authMiddleware';
-import { getUsuarios, createUsuario, deleteUsuario } from '../controllers/usuarioController';
+import { getUsuarios, createUsuario, deleteUsuario, changePassword } from '../controllers/usuarioController';
 
 const router = Router();
 router.use(protect);
 
-router.route('/').get(getUsuarios).post(createUsuario);
+// Rota para o usuário logado alterar a própria senha
+router.put('/change-password', changePassword);
 
+// Rotas de gestão de usuários (geralmente para admins)
+router.route('/')
+    .get(getUsuarios)
+    .post(createUsuario);
+
+router.route('/:id')
+    .delete(deleteUsuario);
 
 export default router;

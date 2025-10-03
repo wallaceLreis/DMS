@@ -1,7 +1,10 @@
-// backend/src/controllers/usuarioController.ts
 import { Request, Response } from 'express';
 import pool from '../config/db';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
+
+interface AuthRequest extends Request {
+  user?: { id: number; username: string; role: string };
+}
 
 export const getUsuarios = async (req: Request, res: Response) => {
     const result = await pool.query('SELECT usuario_id, username, role, ativo, is_nativo FROM dms_usuarios ORDER BY username');
@@ -31,5 +34,36 @@ export const deleteUsuario = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Erro ao deletar usuário:", error);
         res.status(500).json({ message: 'Erro ao deletar usuário.' });
+    }
+};
+
+export const changePassword = async (req: AuthRequest, res: Response) => {
+    const { currentPassword, newPassword } = req.body;
+    const usuario_id = req.user?.id;
+
+    if (!usuario_id) {
+        return res.status(401).json({ message: 'Não autorizado.' });
+    }
+
+    try {
+        const userResult = await pool.query('SELECT password_hash FROM dms_usuarios WHERE usuario_id = $1', [usuario_id]);
+        if (userResult.rowCount === 0) {
+            return res.status(404).json({ message: 'Usuário não encontrado.' });
+        }
+        const storedHash = userResult.rows[0].password_hash;
+
+        const isMatch = await bcrypt.compare(currentPassword, storedHash);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'A senha atual está incorreta.' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const newPasswordHash = await bcrypt.hash(newPassword, salt);
+        
+        await pool.query('UPDATE dms_usuarios SET password_hash = $1 WHERE usuario_id = $2', [newPasswordHash, usuario_id]);
+        res.status(200).json({ message: 'Senha alterada com sucesso.' });
+    } catch (error) {
+        console.error("Erro ao alterar senha:", error);
+        res.status(500).json({ message: 'Erro interno ao alterar a senha.' });
     }
 };

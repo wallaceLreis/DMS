@@ -1,6 +1,6 @@
- import { Request, Response } from 'express';
+import { Request, Response } from 'express';
 import * as userService from '../services/userService';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 export const login = async (req: Request, res: Response) => {
@@ -23,11 +23,10 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Senha inválida.' });
     }
 
-    // Senha válida, gerar o token JWT
     const token = jwt.sign(
       { id: user.usuario_id, username: user.username, role: user.role },
       process.env.JWT_SECRET as string,
-      { expiresIn: '8h' } // Token expira em 8 horas
+      { expiresIn: '8h' }
     );
 
     return res.status(200).json({
