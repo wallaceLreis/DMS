@@ -1,0 +1,40 @@
+# Arquivo de configuração de ambiente
+# Contém senhas, chaves de API e outras informações sensíveis. NUNCA comite este arquivo.
+.env
+.env.local
+.env.*.local
+
+# Dependências do Node.js
+# Esta pasta é recriada com 'npm install' ou 'yarn install'
+node_modules/
+
+# Logs de depuração e erros
+npm-debug.log*
+yarn-error.log
+pnpm-debug.log
+
+# Arquivos de build e produção
+# Gerados automaticamente a partir do seu código-fonte
+dist/
+build/
+
+# Relatórios de cobertura de testes
+coverage/
+
+# Arquivos de dump de banco de dados (segurança e tamanho)
+*.sql
+*.dump
+
+# Arquivos gerados pelo Docker para ambiente local
+# Permite que cada desenvolvedor tenha sua própria configuração local sem afetar o repositório
+docker-compose.override.yml
+
+# Arquivos de Sistema Operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos de configuração de IDEs e editores
+.vscode/
+.idea/
+*.suo
+*.user
