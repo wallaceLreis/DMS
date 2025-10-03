@@ -1,47 +1,38 @@
-// src/services/telaService.ts
 import pool from '../config/db';
 
-/**
- * Busca todas as telas cadastradas no dicionário de dados.
- */
 export const findAllTelas = async () => {
-  // LOG ADICIONADO para depuração
-  console.log('LOG: [Service] Executando findAllTelas...'); 
-  try {
-    const result = await pool.query('SELECT * FROM meta_telas ORDER BY titulo_tela');
-    // LOG ADICIONADO para depuração
-    console.log(`LOG: [Service] Query executada. Encontradas ${result.rowCount ?? 0} linhas.`); 
-    return result.rows;
-  } catch (error) {
-    // LOG ADICIONADO para depuração
-    console.error('LOG DE ERRO: [Service] Erro ao executar a query no banco de dados:', error); 
-    throw error; // Lança o erro para o controller tratar
-  }
+  const result = await pool.query('SELECT * FROM meta_telas ORDER BY titulo_tela');
+  return result.rows;
 };
 
-/**
- * Busca uma tela específica pelo seu ID, incluindo seus campos.
- */
 export const findTelaById = async (telaId: number) => {
   const telaResult = await pool.query('SELECT * FROM meta_telas WHERE tela_id = $1', [telaId]);
   if (telaResult.rows.length === 0) {
-    return null; // Retorna nulo se a tela não for encontrada
+    return null;
   }
-
+  const tela = telaResult.rows[0];
   const camposResult = await pool.query(
     'SELECT * FROM meta_campos WHERE tela_id = $1 ORDER BY ordem_exibicao',
-    [telaId]
+    [tela.tela_id]
   );
-
-  const tela = telaResult.rows[0];
-  tela.campos = camposResult.rows; // Adiciona a lista de campos ao objeto da tela
-
+  tela.campos = camposResult.rows;
   return tela;
 };
 
-/**
- * Cria uma nova definição de tela no banco de dados.
- */
+export const findTelaByNomeTabela = async (nomeTabela: string) => {
+    const telaResult = await pool.query('SELECT * FROM meta_telas WHERE nome_tabela = $1', [nomeTabela]);
+    if (telaResult.rows.length === 0) {
+        return null;
+    }
+    const tela = telaResult.rows[0];
+    const camposResult = await pool.query(
+        'SELECT * FROM meta_campos WHERE tela_id = $1 ORDER BY ordem_exibicao',
+        [tela.tela_id]
+    );
+    tela.campos = camposResult.rows;
+    return tela;
+};
+
 export const createTela = async (data: { nome_tabela: string, titulo_tela: string, ativo?: boolean }) => {
   const { nome_tabela, titulo_tela, ativo } = data;
   const result = await pool.query(
@@ -51,9 +42,6 @@ export const createTela = async (data: { nome_tabela: string, titulo_tela: strin
   return result.rows[0];
 };
 
-/**
- * Atualiza uma definição de tela existente no banco de dados.
- */
 export const updateTela = async (telaId: number, data: { nome_tabela: string, titulo_tela: string, ativo: boolean }) => {
   const { nome_tabela, titulo_tela, ativo } = data;
   const result = await pool.query(

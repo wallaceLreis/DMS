@@ -1,14 +1,27 @@
-// frontend/src/pages/AcessosPage.tsx
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { Box, Typography, List, ListItemButton, ListItemText, Grid, Paper, Checkbox, Button, Dialog, DialogTitle, DialogContent, FormControl, InputLabel, Select, MenuItem, DialogActions } from '@mui/material';
+import { Box, Typography, List, ListItemButton, ListItemText, Grid, Paper, Checkbox, Button, Dialog, DialogTitle, DialogContent, FormControl, InputLabel, Select, MenuItem, DialogActions, IconButton } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { ConfirmationDialog } from '../components/ConfirmationDialog';
 
-// Interfaces
-interface Tela { tela_id: number; titulo_tela: string; }
-interface Usuario { usuario_id: number; username: string; }
-interface Acesso { acesso_id: number; usuario_id: number; username: string; pode_incluir: boolean; pode_alterar: boolean; pode_excluir: boolean; }
+interface Tela {
+    tela_id: number;
+    titulo_tela: string;
+}
+interface Usuario {
+    usuario_id: number;
+    username: string;
+}
+interface Acesso {
+    acesso_id: number;
+    usuario_id: number;
+    username: string;
+    pode_incluir: boolean;
+    pode_alterar: boolean;
+    pode_excluir: boolean;
+}
 
 export const AcessosPage = () => {
     const [telas, setTelas] = useState<Tela[]>([]);
@@ -17,15 +30,26 @@ export const AcessosPage = () => {
     const [acessos, setAcessos] = useState<Acesso[]>([]);
     const [isDialogOpen, setDialogOpen] = useState(false);
     const [newAcesso, setNewAcesso] = useState({ usuario_id: '', pode_incluir: false, pode_alterar: false, pode_excluir: false });
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState<Acesso | null>(null);
+
+    const fetchAcessos = async (telaId: number) => {
+        try {
+            const res = await api.get(`/acessos?tela_id=${telaId}`);
+            setAcessos(res.data);
+        } catch (error) {
+            console.error("Erro ao buscar acessos", error);
+        }
+    };
 
     useEffect(() => {
         api.get('/telas').then(res => setTelas(res.data));
-        api.get('/usuarios').then(res => setUsuarios(res.data));
+        api.get('/usuarios').then(res => setUsuarios(res.data.filter((u: any) => u.role !== 'sup')));
     }, []);
 
     useEffect(() => {
         if (selectedTela) {
-            api.get(`/acessos?tela_id=${selectedTela.tela_id}`).then(res => setAcessos(res.data));
+            fetchAcessos(selectedTela.tela_id);
         } else {
             setAcessos([]);
         }
@@ -33,22 +57,73 @@ export const AcessosPage = () => {
 
     const handleSaveNewAcesso = async () => {
         if (!selectedTela || !newAcesso.usuario_id) return;
-        await api.post('/acessos', { ...newAcesso, tela_id: selectedTela.tela_id });
-        api.get(`/acessos?tela_id=${selectedTela.tela_id}`).then(res => setAcessos(res.data)); // Refresh
-        setDialogOpen(false);
-        setNewAcesso({ usuario_id: '', pode_incluir: false, pode_alterar: false, pode_excluir: false });
+        try {
+            await api.post('/acessos', { ...newAcesso, tela_id: selectedTela.tela_id });
+            await fetchAcessos(selectedTela.tela_id);
+            setDialogOpen(false);
+            setNewAcesso({ usuario_id: '', pode_incluir: false, pode_alterar: false, pode_excluir: false });
+        } catch (error) {
+            console.error("Erro ao salvar acesso", error);
+            alert("Erro ao salvar. Verifique se o usuário já tem acesso a esta tela.");
+        }
     };
 
+    const handlePermissionChange = async (acesso: Acesso, field: 'pode_incluir' | 'pode_alterar' | 'pode_excluir', value: boolean) => {
+        const updatedAcesso = { ...acesso, [field]: value };
+        setAcessos(prev => prev.map(a => a.acesso_id === acesso.acesso_id ? updatedAcesso : a));
+        try {
+            await api.put(`/acessos/${acesso.acesso_id}`, updatedAcesso);
+        } catch (error) {
+            console.error("Erro ao atualizar permissão", error);
+            // Reverte a alteração visual em caso de erro na API
+            if (selectedTela) await fetchAcessos(selectedTela.tela_id);
+        }
+    };
+
+    const openConfirmDialog = (acesso: Acesso) => {
+        setItemToDelete(acesso);
+        setConfirmOpen(true);
+    };
+
+    const handleDelete = async () => {
+        if (!itemToDelete || !selectedTela) return;
+        try {
+            await api.delete(`/acessos/${itemToDelete.acesso_id}`);
+            await fetchAcessos(selectedTela.tela_id);
+        } catch (error) {
+            console.error("Erro ao deletar acesso", error);
+        } finally {
+            setItemToDelete(null);
+            setConfirmOpen(false);
+        }
+    };
+    
     const columns: GridColDef[] = [
         { field: 'username', headerName: 'Usuário', flex: 1 },
-        { field: 'pode_incluir', headerName: 'Incluir', renderCell: (params) => <Checkbox checked={params.value} disabled /> },
-        { field: 'pode_alterar', headerName: 'Alterar', renderCell: (params) => <Checkbox checked={params.value} disabled /> },
-        { field: 'pode_excluir', headerName: 'Excluir', renderCell: (params) => <Checkbox checked={params.value} disabled /> },
+        { 
+            field: 'pode_incluir', headerName: 'Incluir', width: 100,
+            renderCell: (params) => <Checkbox checked={params.value} onChange={(e) => handlePermissionChange(params.row, 'pode_incluir', e.target.checked)} /> 
+        },
+        { 
+            field: 'pode_alterar', headerName: 'Alterar', width: 100,
+            renderCell: (params) => <Checkbox checked={params.value} onChange={(e) => handlePermissionChange(params.row, 'pode_alterar', e.target.checked)} /> 
+        },
+        { 
+            field: 'pode_excluir', headerName: 'Excluir', width: 100,
+            renderCell: (params) => <Checkbox checked={params.value} onChange={(e) => handlePermissionChange(params.row, 'pode_excluir', e.target.checked)} /> 
+        },
+        {
+            field: 'actions', type: 'actions', headerName: 'Ações', width: 80,
+            renderCell: (params) => (
+                <IconButton onClick={() => openConfirmDialog(params.row)}>
+                    <DeleteIcon />
+                </IconButton>
+            )
+        }
     ];
 
     return (
         <Grid container spacing={2} sx={{ height: '80vh' }}>
-            {/* Painel da Esquerda: Lista de Telas */}
             <Grid item xs={4}>
                 <Typography variant="h6">Telas do Sistema</Typography>
                 <Paper style={{ height: '100%', overflow: 'auto' }}>
@@ -62,7 +137,6 @@ export const AcessosPage = () => {
                 </Paper>
             </Grid>
 
-            {/* Painel da Direita: Permissões */}
             <Grid item xs={8}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                     <Typography variant="h6">
@@ -77,11 +151,10 @@ export const AcessosPage = () => {
                 </Paper>
             </Grid>
 
-            {/* Dialog para Adicionar Acesso */}
             <Dialog open={isDialogOpen} onClose={() => setDialogOpen(false)}>
                 <DialogTitle>Adicionar Acesso para {selectedTela?.titulo_tela}</DialogTitle>
                 <DialogContent>
-                    <FormControl fullWidth margin="dense">
+                    <FormControl fullWidth margin="dense" sx={{ mt: 2 }}>
                         <InputLabel>Usuário</InputLabel>
                         <Select label="Usuário" value={newAcesso.usuario_id} onChange={(e) => setNewAcesso({...newAcesso, usuario_id: e.target.value})}>
                             {usuarios.map(user => <MenuItem key={user.usuario_id} value={user.usuario_id}>{user.username}</MenuItem>)}
@@ -98,6 +171,14 @@ export const AcessosPage = () => {
                     <Button onClick={handleSaveNewAcesso} variant="contained">Salvar</Button>
                 </DialogActions>
             </Dialog>
+
+            <ConfirmationDialog
+                open={confirmOpen}
+                onClose={() => setConfirmOpen(false)}
+                onConfirm={handleDelete}
+                title="Confirmar Exclusão de Acesso"
+                message={`Tem certeza que deseja remover o acesso do usuário "${itemToDelete?.username}" a esta tela?`}
+            />
         </Grid>
     );
 };

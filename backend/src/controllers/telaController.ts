@@ -3,11 +3,22 @@ import pool from '../config/db';
 import * as telaService from '../services/telaService';
 
 export const getTelas = async (req: Request, res: Response) => {
+  const { nome_tabela } = req.query;
+
   try {
-    const telas = await telaService.findAllTelas();
-    res.status(200).json(telas);
+    if (nome_tabela) {
+      const tela = await telaService.findTelaByNomeTabela(String(nome_tabela));
+      if (!tela) {
+        return res.status(404).json({ message: "Tela não encontrada." });
+      }
+      return res.status(200).json([tela]);
+    } else {
+      const telas = await telaService.findAllTelas();
+      return res.status(200).json(telas);
+    }
   } catch (error) {
-    res.status(500).json({ message: 'Erro ao buscar telas.' });
+    console.error("Erro em getTelas:", error);
+    return res.status(500).json({ message: 'Erro ao buscar telas.' });
   }
 };
 
@@ -20,6 +31,7 @@ export const getTelaById = async (req: Request, res: Response) => {
     }
     res.status(200).json(tela);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Erro ao buscar detalhes da tela.' });
   }
 };

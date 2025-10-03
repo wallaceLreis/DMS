@@ -1,13 +1,9 @@
-import { RouterProvider } from 'react-router-dom';
-import { router } from './router';
-import { TabsProvider } from './contexts/TabsContext';
+import { useRoutes } from 'react-router-dom';
+import { routerConfig } from './router';
 
 function App() {
-  return (
-    <TabsProvider>
-      <RouterProvider router={router} />
-    </TabsProvider>
-  );
+  const element = useRoutes(routerConfig);
+  return element;
 }
 
 export default App;
