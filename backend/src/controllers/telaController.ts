@@ -1,47 +1,29 @@
-// src/controllers/telaController.ts
 import { Request, Response } from 'express';
+import pool from '../config/db';
 import * as telaService from '../services/telaService';
 
-/**
- * Controlador para buscar e retornar a lista de todas as telas.
- */
 export const getTelas = async (req: Request, res: Response) => {
-  // LOG ADICIONADO para depuração
-  console.log('LOG: [Controller] Acessando a rota getTelas...'); 
   try {
     const telas = await telaService.findAllTelas();
-    // LOG ADICIONADO para depuração
-    console.log('LOG: [Controller] Serviço retornou os dados. Enviando resposta...'); 
     res.status(200).json(telas);
   } catch (error) {
-    // LOG ADICIONADO para depuração
-    console.error('LOG DE ERRO: [Controller] Ocorreu um erro:', error); 
     res.status(500).json({ message: 'Erro ao buscar telas.' });
   }
 };
 
-/**
- * Controlador para buscar e retornar os detalhes de uma tela específica.
- */
 export const getTelaById = async (req: Request, res: Response) => {
   try {
     const telaId = parseInt(req.params.id, 10);
     const tela = await telaService.findTelaById(telaId);
-
     if (!tela) {
       return res.status(404).json({ message: 'Tela não encontrada.' });
     }
-
     res.status(200).json(tela);
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: 'Erro ao buscar detalhes da tela.' });
   }
 };
 
-/**
- * Controlador para criar uma nova tela.
- */
 export const createTela = async (req: Request, res: Response) => {
     try {
         const novaTela = await telaService.createTela(req.body);
@@ -52,9 +34,6 @@ export const createTela = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * Controlador para atualizar uma tela existente.
- */
 export const updateTela = async (req: Request, res: Response) => {
     try {
         const telaId = parseInt(req.params.id, 10);
@@ -66,5 +45,20 @@ export const updateTela = async (req: Request, res: Response) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Erro ao atualizar tela.' });
+    }
+};
+
+export const deleteTela = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    try {
+        const check = await pool.query('SELECT is_nativo FROM meta_telas WHERE tela_id = $1', [id]);
+        if (check.rows[0]?.is_nativo) {
+            return res.status(403).json({ message: 'Telas nativas não podem ser excluídas.' });
+        }
+        await pool.query('DELETE FROM meta_telas WHERE tela_id = $1', [id]);
+        res.status(204).send();
+    } catch (error) {
+        console.error("Erro ao deletar tela:", error);
+        res.status(500).json({ message: 'Erro ao deletar tela.' });
     }
 };

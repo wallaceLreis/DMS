@@ -1,77 +1,111 @@
-// src/pages/GenericScreenPage.tsx
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../services/api';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
-import { Box, Typography, CircularProgress } from '@mui/material';
+import { Box, Typography, CircularProgress, IconButton } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { ConfirmationDialog } from '../components/ConfirmationDialog';
 
 interface Campo {
-  titulo_campo: string;
-  nome_coluna: string;
-  tipo_dado: string;
+    campo_id: number;
+    nome_coluna: string;
+    titulo_campo: string;
+    tipo_dado: string;
 }
-
 interface TelaMetadata {
-  titulo_tela: string;
-  campos: Campo[];
+    titulo_tela: string;
+    campos: Campo[];
 }
 
 export const GenericScreenPage = () => {
-  const { tableName } = useParams<{ tableName: string }>();
-  const [metadata, setMetadata] = useState<TelaMetadata | null>(null);
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!tableName) return;
+    const { tableName } = useParams<{ tableName: string }>();
+    const [metadata, setMetadata] = useState<TelaMetadata | null>(null);
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState<any>(null);
 
     const fetchData = async () => {
-      setLoading(true);
-      try {
-        // 1. Busca os metadados da tela
-        // (Você precisaria criar esta rota no backend que busca tela por nome_tabela)
-        const metaResponse = await api.get(`/telas?nome_tabela=${tableName}`); 
-        const telaInfo = metaResponse.data[0]; // Supondo que a API retorne um array
-
-        // 2. Busca os dados reais da tabela
-        const dataResponse = await api.get(`/data/${tableName}`);
-
-        setMetadata(telaInfo);
-        setData(dataResponse.data);
-      } catch (error) {
-        console.error("Erro:", error);
-      } finally {
-        setLoading(false);
-      }
+        if (!tableName) return;
+        setLoading(true);
+        try {
+            const metaResponse = await api.get(`/telas?nome_tabela=${tableName}`);
+            if (metaResponse.data.length === 0) {
+                throw new Error("Metadata not found");
+            }
+            const telaInfo = metaResponse.data[0];
+            const dataResponse = await api.get(`/data/${tableName}`);
+            setMetadata(telaInfo);
+            setData(dataResponse.data);
+        } catch (error) {
+            console.error("Erro:", error);
+            setMetadata(null);
+            setData([]);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    fetchData();
-  }, [tableName]);
+    useEffect(() => { fetchData(); }, [tableName]);
 
-  if (loading) {
-    return <CircularProgress />;
-  }
+    const openConfirmDialog = (item: any) => {
+        setItemToDelete(item);
+        setConfirmOpen(true);
+    };
 
-  if (!metadata) {
-    return <Typography>Tela "{tableName}" não encontrada ou configurada.</Typography>;
-  }
+    const handleDelete = async () => {
+        if (!itemToDelete || !tableName) return;
+        try {
+            // Assumindo que a chave primária da tabela de dados se chama 'id'
+            await api.delete(`/data/${tableName}/${itemToDelete.id}`);
+            fetchData();
+        } catch (error) {
+            console.error("Erro ao deletar registro:", error);
+        } finally {
+            setItemToDelete(null);
+            setConfirmOpen(false);
+        }
+    };
+    
+    if (loading) return <CircularProgress />;
+    if (!metadata) return <Typography>Tela "{tableName}" não encontrada ou acesso negado.</Typography>;
 
-  // 3. Constrói as colunas do DataGrid dinamicamente a partir dos metadados
-  const columns: GridColDef[] = metadata.campos.map((campo) => ({
-    field: campo.nome_coluna,
-    headerName: campo.titulo_campo,
-    width: 150,
-    // Poderíamos adicionar mais lógica aqui baseada no tipo_dado (ex: formatação de número/data)
-  }));
+    const columns: GridColDef[] = metadata.campos.map((campo) => ({
+        field: campo.nome_coluna,
+        headerName: campo.titulo_campo,
+        flex: 1,
+    }));
+    
+    columns.push({
+        field: 'actions',
+        type: 'actions',
+        headerName: 'Ações',
+        width: 100,
+        renderCell: (params) => (
+            <IconButton onClick={() => openConfirmDialog(params.row)}>
+                <DeleteIcon />
+            </IconButton>
+        )
+    });
 
-  return (
-    <Box>
-      <Typography variant="h4" gutterBottom>{metadata.titulo_tela}</Typography>
-      <Box sx={{ height: 600, width: '100%' }}>
-        {/* O ID da linha precisa ser uma coluna real na sua tabela de dados, ex: 'id' ou 'cliente_id' */}
-        <DataGrid rows={data} columns={columns} getRowId={(row) => row.id} /> 
-      </Box>
-    </Box>
-  );
+    return (
+        <Box>
+            <Typography variant="h4" gutterBottom>{metadata.titulo_tela}</Typography>
+            <Box sx={{ height: '70vh', width: '100%' }}>
+                <DataGrid
+                    rows={data}
+                    columns={columns}
+                    getRowId={(row) => row.id} // Assumindo que a chave primária se chama 'id'
+                />
+            </Box>
+            <ConfirmationDialog
+                open={confirmOpen}
+                onClose={() => setConfirmOpen(false)}
+                onConfirm={handleDelete}
+                title="Confirmar Exclusão"
+                message={`Tem certeza que deseja excluir este registro? Esta ação não pode ser desfeita.`}
+            />
+        </Box>
+    );
 };
