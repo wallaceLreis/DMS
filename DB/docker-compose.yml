@@ -1,0 +1,24 @@
+services:
+  # serviço de banco de dados PostgreSQL
+  db:
+    image: postgres:15-alpine  
+    container_name: dms_database
+    restart: always
+    
+    # Variáveis de ambiente para criar o banco e o usuário do DB
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER} 
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} 
+      
+    # Mapeia a porta do contêiner para a sua máquina local
+    ports:
+      - "5432:5432"
+      
+    # Garante que os dados não sejam perdidos ao reiniciar/remover o contêiner
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+# Define o volume nomeado para persistir os dados
+volumes:
+  postgres_data:
