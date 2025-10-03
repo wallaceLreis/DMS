@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-
-// Componentes do MUI
 import { Button, TextField, Container, Typography, Box, Alert } from '@mui/material';
 
 export const LoginPage = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('sup');
+  const [password, setPassword] = useState('admin');
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -20,7 +18,8 @@ export const LoginPage = () => {
       const response = await api.post('/auth/login', { username, password });
       if (response.data.token) {
         login(response.data.token);
-        navigate('/dicionario'); // Redireciona para a tela principal após o login
+        // CORREÇÃO AQUI: Redireciona para /inicio em vez de /dicionario
+        navigate('/inicio');
       }
     } catch (err) {
       setError('Falha no login. Verifique suas credenciais.');
