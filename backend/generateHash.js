@@ -1,10 +1,9 @@
-const bcrypt = require('bcrypt');
+// backend/generateHash.js
+const bcrypt = require('bcryptjs'); // Alterado para bcryptjs
 
-// Pega a senha do argumento da linha de comando.
 const password = process.argv[2];
 
 if (!password) {
-  console.log('Por favor, forneça uma senha.');
   console.log('Uso: node generateHash.js <sua_senha_aqui>');
   process.exit(1);
 }
@@ -17,5 +16,6 @@ bcrypt.hash(password, saltRounds, (err, hash) => {
     return;
   }
   console.log('Senha original:', password);
-  console.log('Hash gerado:', hash);
+  console.log('--- COPIE O HASH ABAIXO ---');
+  console.log(hash); // Apenas o hash será exibido para facilitar a cópia
 });

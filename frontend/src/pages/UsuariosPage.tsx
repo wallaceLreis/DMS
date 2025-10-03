@@ -7,7 +7,17 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 
-const style = { position: 'absolute' as 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 400, bgcolor: 'background.paper', border: '2px solid #000', boxShadow: 24, p: 4 };
+const style = {
+  position: 'absolute' as 'absolute',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: 400,
+  bgcolor: 'background.paper',
+  border: '2px solid #000',
+  boxShadow: 24,
+  p: 4,
+};
 
 export const UsuariosPage = () => {
     const [usuarios, setUsuarios] = useState<any[]>([]);
@@ -17,20 +27,31 @@ export const UsuariosPage = () => {
     const [itemToDelete, setItemToDelete] = useState<any>(null);
 
     const fetchUsuarios = async () => {
-        const response = await api.get('/usuarios');
-        setUsuarios(response.data);
+        try {
+            const response = await api.get('/usuarios');
+            setUsuarios(response.data);
+        } catch (error) {
+            console.error("Erro ao buscar usuários:", error);
+        }
     };
 
-    useEffect(() => { fetchUsuarios(); }, []);
+    useEffect(() => {
+        fetchUsuarios();
+    }, []);
 
     const handleOpen = () => setOpen(true);
     const handleClose = () => setOpen(false);
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => setNewUser({ ...newUser, [e.target.name]: e.target.value });
 
     const handleSave = async () => {
-        await api.post('/usuarios', newUser);
-        fetchUsuarios();
-        handleClose();
+        try {
+            await api.post('/usuarios', newUser);
+            fetchUsuarios();
+            handleClose();
+        } catch (error) {
+            console.error("Erro ao salvar usuário:", error);
+            alert("Não foi possível salvar o usuário.");
+        }
     };
 
     const openConfirmDialog = (user: any) => {
@@ -38,12 +59,32 @@ export const UsuariosPage = () => {
         setConfirmOpen(true);
     };
 
+    // FUNÇÃO handleDelete COMPLETA E CORRIGIDA
     const handleDelete = async () => {
         if (!itemToDelete) return;
-        await api.delete(`/usuarios/${itemToDelete.usuario_id}`);
-        fetchUsuarios();
-        setItemToDelete(null);
-        setConfirmOpen(false);
+
+        try {
+            console.log(`Tentando excluir o usuário com ID: ${itemToDelete.usuario_id}`); // Log de depuração
+            
+            // 1. Tenta executar a exclusão
+            await api.delete(`/usuarios/${itemToDelete.usuario_id}`);
+            
+            console.log("Usuário excluído com sucesso!"); // Log de depuração
+            
+            // 2. Se a exclusão for bem-sucedida, atualiza a lista de usuários
+            fetchUsuarios();
+
+        } catch (error) {
+            // 3. Se ocorrer um erro na API, ele será capturado aqui
+            console.error("Falha ao excluir o usuário:", error);
+            alert("Ocorreu um erro ao excluir o usuário. Verifique o console para mais detalhes.");
+            
+        } finally {
+            // 4. Este bloco é executado SEMPRE, seja em caso de sucesso ou falha
+            // Garantindo que o dialog de confirmação sempre feche
+            setItemToDelete(null);
+            setConfirmOpen(false);
+        }
     };
 
     const columns: GridColDef[] = [
@@ -52,7 +93,9 @@ export const UsuariosPage = () => {
         { field: 'role', headerName: 'Perfil', width: 150 },
         { field: 'ativo', headerName: 'Ativo', width: 120, type: 'boolean' },
         {
-            field: 'actions', type: 'actions', headerName: 'Ações',
+            field: 'actions',
+            type: 'actions',
+            headerName: 'Ações',
             renderCell: (params) => (
                 <IconButton onClick={() => openConfirmDialog(params.row)} disabled={params.row.is_nativo}>
                     <DeleteIcon />
@@ -75,7 +118,7 @@ export const UsuariosPage = () => {
                     <Typography variant="h6">Novo Usuário</Typography>
                     <TextField margin="normal" fullWidth label="Nome de Usuário" name="username" onChange={handleInputChange} />
                     <TextField margin="normal" fullWidth label="Senha" name="password" type="password" onChange={handleInputChange} />
-                    <TextField margin="normal" fullWidth label="Perfil (role)" name="role" onChange={handleInputChange} />
+                    <TextField margin="normal" fullWidth label="Perfil (role)" name="role" defaultValue="user" onChange={handleInputChange} />
                     <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
                         <Button onClick={handleClose}>Cancelar</Button>
                         <Button onClick={handleSave} variant="contained" sx={{ ml: 1 }}>Salvar</Button>
