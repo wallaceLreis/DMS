@@ -8,7 +8,8 @@ import { MainLayout } from '../layouts/MainLayout';
 import { AcessosPage } from '../pages/AcessosPage';
 import { DicionarioPage } from '../pages/DicionarioPage';
 import { UsuariosPage } from '../pages/UsuariosPage';
-import { ProdutosPage } from '../pages/ProdutosPage'; // Importa a página de Produtos
+import { ProdutosPage } from '../pages/ProdutosPage';
+import { EstoquePage } from '../pages/EstoquePage'; // Importa a nova página de Estoque
 
 const ProtectedRoute = () => {
   const { token } = useAuth();
@@ -26,12 +27,15 @@ export const routerConfig: RouteObject[] = [
     children: [
         { path: '/', element: <Navigate to="/inicio" replace /> },
         { path: 'inicio', element: <HomePage /> },
-        // Rotas para as telas customizadas com funcionalidades específicas
+        
+        // Rotas para as telas customizadas
         { path: 'dicionario', element: <DicionarioPage /> },
         { path: 'usuarios', element: <UsuariosPage /> },
         { path: 'acessos', element: <AcessosPage /> },
         { path: 'produtos', element: <ProdutosPage /> },
-        // Rota genérica para todas as outras telas criadas dinamicamente
+        { path: 'estoque', element: <EstoquePage /> }, // <-- NOVA ROTA ADICIONADA
+        
+        // Rota genérica para telas dinâmicas
         { path: 'tela/:tableName', element: <GenericScreenPage /> },
     ]
   },
