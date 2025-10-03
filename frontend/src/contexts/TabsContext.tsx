@@ -1,6 +1,7 @@
-import { createContext, useState, useContext } from 'react';
+import { createContext, useState, useContext, useEffect } from 'react';
 import type { ReactNode } from 'react';
-// import { useNavigate } from 'react-router-dom'; // <-- LINHA REMOVIDA
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext';
 
 interface Tab {
     label: string;
@@ -12,7 +13,7 @@ interface TabsContextType {
     activeTab: string | false;
     setActiveTab: (value: string | false) => void;
     addTab: (tab: Tab) => void;
-    closeTab: (value: string) => string;
+    closeTab: (value: string) => void;
 }
 
 const TabsContext = createContext<TabsContextType | undefined>(undefined);
@@ -22,7 +23,14 @@ const initialTabs: Tab[] = [{ label: 'Início', value: '/inicio' }];
 export const TabsProvider = ({ children }: { children: ReactNode }) => {
     const [openTabs, setOpenTabs] = useState<Tab[]>(initialTabs);
     const [activeTab, setActiveTab] = useState<string | false>('/inicio');
-    // const navigate = useNavigate(); // <-- LINHA REMOVIDA
+    const { user } = useAuth();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        setOpenTabs(initialTabs);
+        setActiveTab('/inicio');
+        navigate('/inicio');
+    }, [user?.id]);
 
     const addTab = (tab: Tab) => {
         if (!openTabs.find(t => t.value === tab.value)) {
@@ -31,18 +39,20 @@ export const TabsProvider = ({ children }: { children: ReactNode }) => {
         setActiveTab(tab.value);
     };
 
-    const closeTab = (valueToClose: string): string => {
+    const closeTab = (valueToClose: string) => {
+        if (valueToClose === '/inicio') return;
+
         const tabIndex = openTabs.findIndex(t => t.value === valueToClose);
         const newTabs = openTabs.filter(t => t.value !== valueToClose);
         setOpenTabs(newTabs);
 
         if (activeTab !== valueToClose) {
-            return activeTab || '/inicio';
+            return;
         }
 
         const newActiveTab = newTabs[tabIndex - 1] || initialTabs[0];
         setActiveTab(newActiveTab.value);
-        return newActiveTab.value;
+        navigate(newActiveTab.value);
     };
 
     return (

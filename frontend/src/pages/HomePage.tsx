@@ -5,9 +5,14 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { Card, CardActionArea, CardContent, Typography, Box } from '@mui/material';
 
+interface TelaApi {
+    titulo_tela: string;
+    nome_tabela: string;
+}
+
 interface TelaDisponivel {
     label: string;
-    value: string;
+    nome_tabela: string;
 }
 
 export const HomePage = () => {
@@ -20,25 +25,11 @@ export const HomePage = () => {
         const fetchMenu = async () => {
             try {
                 const response = await api.get('/usuarios/me/menu');
-                const items: TelaDisponivel[] = response.data.map((tela: any) => ({
+                const items: TelaDisponivel[] = response.data.map((tela: TelaApi) => ({
                     label: tela.titulo_tela,
-                    value: `/tela/${tela.nome_tabela}`,
+                    nome_tabela: tela.nome_tabela,
                 }));
-
-                if (user?.role === 'sup') {
-                    const baseScreens: TelaDisponivel[] = [
-                        { label: 'Dicionário de Dados', value: '/dicionario' },
-                        { label: 'Gestão de Usuários', value: '/usuarios' },
-                        { label: 'Gestão de Acessos', value: '/acessos' },
-                    ];
-                    // CORREÇÃO AQUI: Adiciona o tipo para 'apiItem'
-                    const filteredItems = items.filter((apiItem: TelaDisponivel) => 
-                        !baseScreens.some(baseItem => apiItem.value.includes(baseItem.value))
-                    );
-                    setTelasDisponiveis([...baseScreens, ...filteredItems]);
-                } else {
-                     setTelasDisponiveis(items);
-                }
+                setTelasDisponiveis(items);
             } catch (error) {
                 console.error("Erro ao buscar telas disponíveis:", error);
             }
@@ -50,8 +41,17 @@ export const HomePage = () => {
     }, [user]);
 
     const handleOpenScreen = (tela: TelaDisponivel) => {
-        addTab(tela);
-        navigate(tela.value);
+        // CORREÇÃO AQUI: Adicionado 'produtos' à lista de telas base
+        const baseScreens = ['dicionario', 'usuarios', 'acessos', 'produtos'];
+        
+        const path = baseScreens.includes(tela.nome_tabela)
+            ? `/${tela.nome_tabela}`
+            : `/tela/${tela.nome_tabela}`;
+        
+        const tabToOpen = { label: tela.label, value: path };
+
+        addTab(tabToOpen);
+        navigate(path);
     };
 
     return (
@@ -60,7 +60,7 @@ export const HomePage = () => {
             <Typography variant="subtitle1" gutterBottom>Selecione uma tela para abrir:</Typography>
             <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                 {telasDisponiveis.map((tela) => (
-                    <Box key={tela.value} sx={{ width: { xs: '100%', sm: 'calc(50% - 12px)', md: 'calc(33.333% - 16px)' } }}>
+                    <Box key={tela.nome_tabela} sx={{ width: { xs: '100%', sm: 'calc(50% - 12px)', md: 'calc(33.333% - 16px)' } }}>
                         <Card sx={{ height: '100%' }}>
                             <CardActionArea onClick={() => handleOpenScreen(tela)} sx={{ height: '100%' }}>
                                 <CardContent>

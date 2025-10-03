@@ -35,9 +35,18 @@ export const GenericScreenPage = () => {
                 throw new Error("Metadata not found");
             }
             const telaInfo = metaResponse.data[0];
-            const dataResponse = await api.get(`/data/${tableName}`);
+            
+            // A rota genérica de dados pode não existir para telas base, o que é ok
+            let dataResponse;
+            try {
+                dataResponse = await api.get(`/data/${tableName}`);
+                setData(dataResponse.data);
+            } catch (dataError) {
+                console.log(`Não há uma rota de dados para /data/${tableName}. Isso pode ser normal para telas como 'Dicionário'.`);
+                setData([]);
+            }
+
             setMetadata(telaInfo);
-            setData(dataResponse.data);
         } catch (error) {
             console.error("Erro:", error);
             setMetadata(null);
@@ -47,7 +56,9 @@ export const GenericScreenPage = () => {
         }
     };
 
-    useEffect(() => { fetchData(); }, [tableName]);
+    useEffect(() => { 
+        fetchData(); 
+    }, [tableName]);
 
     const openConfirmDialog = (item: any) => {
         setItemToDelete(item);
@@ -57,7 +68,6 @@ export const GenericScreenPage = () => {
     const handleDelete = async () => {
         if (!itemToDelete || !tableName) return;
         try {
-            // Assumindo que a chave primária da tabela de dados se chama 'id'
             await api.delete(`/data/${tableName}/${itemToDelete.id}`);
             fetchData();
         } catch (error) {
@@ -69,7 +79,10 @@ export const GenericScreenPage = () => {
     };
     
     if (loading) return <CircularProgress />;
-    if (!metadata) return <Typography>Tela "{tableName}" não encontrada ou acesso negado.</Typography>;
+
+    if (!metadata || !metadata.campos) {
+        return <Typography>Metadados da tela "{tableName}" não encontrados ou acesso negado.</Typography>;
+    }
 
     const columns: GridColDef[] = metadata.campos.map((campo) => ({
         field: campo.nome_coluna,
@@ -96,7 +109,7 @@ export const GenericScreenPage = () => {
                 <DataGrid
                     rows={data}
                     columns={columns}
-                    getRowId={(row) => row.id} // Assumindo que a chave primária se chama 'id'
+                    getRowId={(row) => row.id} // Assume que a chave primária de todas as tabelas de dados se chama 'id'
                 />
             </Box>
             <ConfirmationDialog

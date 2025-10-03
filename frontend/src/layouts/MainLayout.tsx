@@ -19,15 +19,23 @@ export const MainLayout = () => {
     const [passwordError, setPasswordError] = useState('');
 
     useEffect(() => {
-        setActiveTab(location.pathname);
-    }, [location.pathname, setActiveTab]);
+        // --- LÓGICA DE CORREÇÃO AQUI ---
+        // Verifica se a URL atual corresponde a alguma aba aberta antes de marcá-la como ativa.
+        const tabExists = openTabs.some(tab => tab.value === location.pathname);
+        if (tabExists) {
+            setActiveTab(location.pathname);
+        }
+        // Se não existir (como no caso da rota '/'), ele não faz nada,
+        // o que impede o erro e permite que o redirecionamento do roteador funcione.
+    }, [location.pathname, openTabs, setActiveTab]);
     
+    const isMenuOpen = Boolean(anchorEl);
     const handleMenu = (event: React.MouseEvent<HTMLElement>) => setAnchorEl(event.currentTarget);
     const handleClose = () => setAnchorEl(null);
+
     const handleLogout = () => {
         handleClose();
         logout();
-        navigate('/login');
     };
 
     const openPasswordDialog = () => {
@@ -56,8 +64,7 @@ export const MainLayout = () => {
 
     const handleCloseTab = (e: React.MouseEvent, valueToClose: string) => {
         e.stopPropagation();
-        const newPath = closeTab(valueToClose);
-        navigate(newPath);
+        closeTab(valueToClose);
     };
 
     return (
@@ -69,11 +76,18 @@ export const MainLayout = () => {
                         DMS App
                     </Typography>
                     <div>
-                        <IconButton size="large" onClick={handleMenu} color="inherit">
+                        <IconButton size="large" onClick={handleMenu} color="inherit" aria-label="menu do usuário">
                             <AccountCircle />
                         </IconButton>
-                        <Menu open={Boolean(anchorEl)} anchorEl={anchorEl} onClose={handleClose}>
-                            <MenuItem disabled>{user?.username}</MenuItem>
+                        <Menu
+                            anchorEl={anchorEl}
+                            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                            keepMounted
+                            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                            open={isMenuOpen}
+                            onClose={handleClose}
+                        >
+                            <MenuItem disabled sx={{ fontWeight: 'bold' }}>{user?.username}</MenuItem>
                             <MenuItem onClick={openPasswordDialog}>Trocar Senha</MenuItem>
                             <MenuItem onClick={handleLogout}>Sair</MenuItem>
                         </Menu>
