@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { Box, Typography, Button, CircularProgress, Chip } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
-import type { GridColDef } from '@mui/x-data-grid/models';
+import type { GridColDef, GridRowParams } from '@mui/x-data-grid/models';
 import AddIcon from '@mui/icons-material/Add';
 import { CotacaoDialog } from '../components/CotacaoDialog';
+import { CotacaoResultsDialog } from '../components/CotacaoResultsDialog';
 
 interface Cotacao {
     cotacao_id: number;
@@ -19,6 +20,8 @@ export const CotacaoFretePage = () => {
     const [cotacoes, setCotacoes] = useState<Cotacao[]>([]);
     const [loading, setLoading] = useState(true);
     const [isDialogOpen, setDialogOpen] = useState(false);
+    const [isResultsOpen, setResultsOpen] = useState(false);
+    const [selectedCotacaoId, setSelectedCotacaoId] = useState<number | null>(null);
 
     const fetchCotacoes = async () => {
         setLoading(true);
@@ -56,6 +59,13 @@ export const CotacaoFretePage = () => {
         }
     };
 
+    const handleRowDoubleClick = (params: GridRowParams) => {
+        if (params.row.status === 'CONCLUIDO') {
+            setSelectedCotacaoId(params.row.cotacao_id);
+            setResultsOpen(true);
+        }
+    };
+
     const columns: GridColDef[] = [
         { field: 'cotacao_id', headerName: 'ID', width: 90 },
         { field: 'destinatario', headerName: 'Destinatário', flex: 1 },
@@ -78,9 +88,20 @@ export const CotacaoFretePage = () => {
                 </Button>
             </Box>
             <Box sx={{ height: '70vh', width: '100%' }}>
-                <DataGrid rows={cotacoes} columns={columns} loading={loading} getRowId={(row: Cotacao) => row.cotacao_id} />
+                <DataGrid 
+                    rows={cotacoes} 
+                    columns={columns} 
+                    loading={loading} 
+                    getRowId={(row: Cotacao) => row.cotacao_id}
+                    onRowDoubleClick={handleRowDoubleClick}
+                />
             </Box>
             <CotacaoDialog open={isDialogOpen} onClose={() => setDialogOpen(false)} onSave={handleSave} />
+            <CotacaoResultsDialog 
+                open={isResultsOpen}
+                onClose={() => setResultsOpen(false)}
+                cotacaoId={selectedCotacaoId}
+            />
         </Box>
     );
 };
