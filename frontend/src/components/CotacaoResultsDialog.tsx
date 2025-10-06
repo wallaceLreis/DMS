@@ -40,7 +40,7 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
                 })
                 .catch(err => {
                     console.error("Erro ao buscar resultados da cotação:", err);
-                    setError("Não foi possível carregar os detalhes da cotação. Verifique o console do backend para mais detalhes.");
+                    setError("Não foi possível carregar os detalhes da cotação. Verifique o console para mais detalhes.");
                 })
                 .finally(() => {
                     setLoading(false);
