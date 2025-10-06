@@ -19,75 +19,34 @@ export const getProdutos = async (req: Request, res: Response) => {
     }
 };
 
-export const getProdutoById = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    try {
-        const produtoRes = await pool.query('SELECT * FROM produtos WHERE produto_id = $1', [id]);
-        if (produtoRes.rowCount === 0) {
-            return res.status(404).json({ message: 'Produto não encontrado' });
-        }
-        
-        const unidadesRes = await pool.query('SELECT * FROM produto_unidades WHERE produto_id = $1', [id]);
-        
-        const produto = produtoRes.rows[0];
-        produto.unidades = unidadesRes.rows;
-        
-        res.json(produto);
-    } catch (error) {
-        console.error("Erro ao buscar produto:", error);
-        res.status(500).json({ message: "Erro ao buscar produto." });
-    }
-};
-
 export const createProduto = async (req: Request, res: Response) => {
-    const { nome, ean, altura, largura, profundidade, peso, unidades } = req.body;
+    const { nome, ean, altura, largura, profundidade, peso } = req.body;
     const imagem_url = req.file ? `/files/uploads/${req.file.filename}` : null;
-    const client = await pool.connect();
 
     try {
-        await client.query('BEGIN'); // Inicia a transação
-
-        const lastCodeResult = await client.query('SELECT MAX(codigo) as max_code FROM produtos');
+        const lastCodeResult = await pool.query('SELECT MAX(codigo) as max_code FROM produtos');
         const nextCode = lastCodeResult.rows[0].max_code ? Number(lastCodeResult.rows[0].max_code) + 1 : 101010001;
 
-        const produtoQuery = `
-            INSERT INTO produtos (codigo, nome, ean, imagem_url, altura, largura, profundidade, peso)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING produto_id`;
-        const produtoResult = await client.query(produtoQuery, [nextCode, nome, ean, imagem_url, altura, largura, profundidade, peso]);
-        const newProdutoId = produtoResult.rows[0].produto_id;
-
-        // Insere a unidade base (fator 1) que agora está junto com as outras
-        const parsedUnidades = unidades ? JSON.parse(unidades) : [];
-        for (const unidade of parsedUnidades) {
-            const unidadeQuery = `
-                INSERT INTO produto_unidades (produto_id, descricao, ean, fator_conversao, peso, altura, largura, profundidade)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`;
-            await client.query(unidadeQuery, [newProdutoId, unidade.descricao, unidade.ean, unidade.fator_conversao, unidade.peso, unidade.altura, unidade.largura, unidade.profundidade]);
-        }
-        
-        await client.query('COMMIT');
-        res.status(201).json({ produto_id: newProdutoId });
+        const newProduto = await pool.query(
+            `INSERT INTO produtos (codigo, nome, ean, imagem_url, altura, largura, profundidade, peso)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [nextCode, nome, ean, imagem_url, altura, largura, profundidade, peso]
+        );
+        res.status(201).json(newProduto.rows[0]);
     } catch (error) {
-        await client.query('ROLLBACK');
         console.error("Erro ao criar produto:", error);
         res.status(500).json({ message: "Erro ao criar produto." });
-    } finally {
-        client.release();
     }
 };
 
 export const updateProduto = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { nome, ean, altura, largura, profundidade, peso, unidades } = req.body;
+    const { nome, ean, altura, largura, profundidade, peso } = req.body;
     const imagem_url = req.file ? `/files/uploads/${req.file.filename}` : null;
-    const client = await pool.connect();
 
     try {
-        await client.query('BEGIN');
-
-        // Lógica de apagar imagem antiga se uma nova for enviada
         if (imagem_url) {
-            const oldProduto = await client.query('SELECT imagem_url FROM produtos WHERE produto_id = $1', [id]);
+            const oldProduto = await pool.query('SELECT imagem_url FROM produtos WHERE produto_id = $1', [id]);
             if (oldProduto.rows[0]?.imagem_url) {
                 const oldImagePath = path.join(__dirname, '../../public', oldProduto.rows[0].imagem_url.replace('/files', ''));
                 if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
@@ -97,43 +56,26 @@ export const updateProduto = async (req: Request, res: Response) => {
         const query = imagem_url
             ? `UPDATE produtos SET nome=$1, ean=$2, altura=$3, largura=$4, profundidade=$5, peso=$6, imagem_url=$7 WHERE produto_id=$8 RETURNING *`
             : `UPDATE produtos SET nome=$1, ean=$2, altura=$3, largura=$4, profundidade=$5, peso=$6 WHERE produto_id=$7 RETURNING *`;
+        
         const params = imagem_url
             ? [nome, ean, altura, largura, profundidade, peso, imagem_url, id]
             : [nome, ean, altura, largura, profundidade, peso, id];
-        await client.query(query, params);
 
-        // Deleta as unidades antigas e insere as novas para garantir consistência
-        await client.query('DELETE FROM produto_unidades WHERE produto_id = $1', [id]);
-        const parsedUnidades = unidades ? JSON.parse(unidades) : [];
-        for (const unidade of parsedUnidades) {
-            const unidadeQuery = `
-                INSERT INTO produto_unidades (produto_id, descricao, ean, fator_conversao, peso, altura, largura, profundidade)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`;
-            await client.query(unidadeQuery, [id, unidade.descricao, unidade.ean, unidade.fator_conversao, unidade.peso, unidade.altura, unidade.largura, unidade.profundidade]);
-        }
-
-        await client.query('COMMIT');
-        res.json({ message: "Produto atualizado com sucesso" });
+        const result = await pool.query(query, params);
+        res.json(result.rows[0]);
     } catch (error) {
-        await client.query('ROLLBACK');
         console.error("Erro ao atualizar produto:", error);
         res.status(500).json({ message: "Erro ao atualizar produto." });
-    } finally {
-        client.release();
     }
 };
 
 export const deleteProduto = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const client = await pool.connect();
     try {
-        await client.query('BEGIN');
-        const oldProduto = await client.query('SELECT imagem_url FROM produtos WHERE produto_id = $1', [id]);
+        const oldProduto = await pool.query('SELECT imagem_url FROM produtos WHERE produto_id = $1', [id]);
+        const result = await pool.query('DELETE FROM produtos WHERE produto_id = $1', [id]);
         
-        // A exclusão das unidades é feita em cascata (ON DELETE CASCADE)
-        const result = await client.query('DELETE FROM produtos WHERE produto_id = $1', [id]);
         if (result.rowCount === 0) {
-            await client.query('ROLLBACK');
             return res.status(404).json({ message: "Produto não encontrado." });
         }
 
@@ -142,13 +84,24 @@ export const deleteProduto = async (req: Request, res: Response) => {
              if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
         }
         
-        await client.query('COMMIT');
         res.status(204).send();
     } catch (error) {
-        await client.query('ROLLBACK');
         console.error("Erro ao deletar produto:", error);
         res.status(500).json({ message: "Erro ao deletar produto." });
-    } finally {
-        client.release();
+    }
+};
+
+// A função getProdutoById não é mais necessária para esta UI, mas pode ser mantida se desejar
+export const getProdutoById = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    try {
+        const produtoRes = await pool.query('SELECT * FROM produtos WHERE produto_id = $1', [id]);
+        if (produtoRes.rowCount === 0) {
+            return res.status(404).json({ message: 'Produto não encontrado' });
+        }
+        res.json(produtoRes.rows[0]);
+    } catch (error) {
+        console.error("Erro ao buscar produto:", error);
+        res.status(500).json({ message: "Erro ao buscar produto." });
     }
 };
