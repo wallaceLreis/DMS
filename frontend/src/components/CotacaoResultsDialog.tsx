@@ -40,7 +40,7 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
                 })
                 .catch(err => {
                     console.error("Erro ao buscar resultados da cotação:", err);
-                    setError("Não foi possível carregar os detalhes da cotação. Verifique o console para mais detalhes.");
+                    setError("Não foi possível carregar os detalhes da cotação. Verifique o console do backend para mais detalhes.");
                 })
                 .finally(() => {
                     setLoading(false);
@@ -49,16 +49,34 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
     }, [open, cotacaoId]);
 
     const columns: GridColDef[] = [
+        // --- NOVA COLUNA DEDICADA PARA A LOGO ---
+        {
+            field: 'url_logo',
+            headerName: 'Logo',
+            width: 80,
+            sortable: false,
+            filterable: false,
+            renderCell: (params) => (
+                <Avatar 
+                    src={params.value} 
+                    sx={{ 
+                        width: 56,
+                        height: 32,
+                        borderRadius: '4px',
+                        bgcolor: 'transparent',
+                        '& img': { 
+                            objectFit: 'contain',
+                        }
+                    }} 
+                    variant="square"
+                />
+            )
+        },
+        // --- COLUNAS EXISTENTES ---
         { 
             field: 'transportadora', 
             headerName: 'Transportadora', 
-            flex: 1,
-            renderCell: (params) => (
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Avatar src={params.row.url_logo} sx={{ mr: 1.5, width: 24, height: 24 }} variant="square" />
-                    {params.value}
-                </Box>
-            )
+            flex: 1
         },
         { field: 'servico', headerName: 'Serviço', flex: 1 },
         { 
@@ -72,7 +90,7 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
     ];
 
     return (
-        <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+        <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
             <DialogTitle>Resultados da Cotação #{cotacaoId}</DialogTitle>
             <DialogContent>
                 {loading && (
@@ -93,7 +111,7 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
                             rows={data.resultados}
                             columns={columns}
                             getRowId={(row) => row.resultado_id}
-                            density="compact"
+                            density="standard"
                         />
                     </Box>
                 )}
