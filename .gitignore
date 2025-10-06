@@ -1,6 +1,6 @@
 # Arquivo de configuração de ambiente
 # Contém senhas, chaves de API e outras informações sensíveis. NUNCA comite este arquivo.
-.env
+
 .env.local
 .env.*.local
 
