@@ -7,10 +7,10 @@ CREATE DATABASE DMSPROD;
 \c DMSPROD;
 
 -- =================================================
--- Tabelas EXATAS do seu dump
+-- Tabelas EXATAS do seu dump com REGRAS DE EXCLUSÃO
 -- =================================================
 
--- dms_usuarios
+-- dms_usuarios (PROIBIDO excluir se tiver registros filhos)
 CREATE TABLE dms_usuarios (
     usuario_id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE dms_usuarios (
     is_nativo BOOLEAN DEFAULT false NOT NULL
 );
 
--- meta_telas
+-- meta_telas (PROIBIDO excluir se tiver registros filhos)
 CREATE TABLE meta_telas (
     tela_id SERIAL PRIMARY KEY,
     nome_tabela VARCHAR(100) UNIQUE NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE meta_telas (
     is_nativo BOOLEAN DEFAULT false NOT NULL
 );
 
--- meta_campos
+-- meta_campos (exclui em CASCATA se a tela for excluída)
 CREATE TABLE meta_campos (
     campo_id SERIAL PRIMARY KEY,
     tela_id INTEGER NOT NULL REFERENCES meta_telas(tela_id) ON DELETE CASCADE,
@@ -45,7 +45,7 @@ CREATE TABLE meta_campos (
     UNIQUE(tela_id, nome_coluna)
 );
 
--- dms_acessos (ESTRUTURA CORRETA DO SEU DUMP)
+-- dms_acessos (exclui em CASCATA se usuário ou tela for excluída)
 CREATE TABLE dms_acessos (
     acesso_id SERIAL PRIMARY KEY,
     usuario_id INTEGER NOT NULL REFERENCES dms_usuarios(usuario_id) ON DELETE CASCADE,
@@ -57,7 +57,7 @@ CREATE TABLE dms_acessos (
     UNIQUE(usuario_id, tela_id)
 );
 
--- empresas
+-- empresas (PROIBIDO excluir se tiver registros filhos)
 CREATE TABLE empresas (
     empresa_id SERIAL PRIMARY KEY,
     nome_fantasia VARCHAR(255) NOT NULL,
@@ -74,7 +74,7 @@ CREATE TABLE empresas (
     data_criacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- produtos
+-- produtos (PROIBIDO excluir se tiver registros filhos)
 CREATE TABLE produtos (
     produto_id SERIAL PRIMARY KEY,
     codigo BIGINT UNIQUE NOT NULL,
@@ -88,7 +88,7 @@ CREATE TABLE produtos (
     data_criacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- estoque_movimentos
+-- estoque_movimentos (PROIBIDO excluir produto ou usuário referenciado)
 CREATE TABLE estoque_movimentos (
     movimento_id SERIAL PRIMARY KEY,
     produto_id INTEGER NOT NULL REFERENCES produtos(produto_id) ON DELETE RESTRICT,
@@ -100,16 +100,16 @@ CREATE TABLE estoque_movimentos (
     numero_nota VARCHAR(50)
 );
 
--- meta_relacionamentos
+-- meta_relacionamentos (PROIBIDO excluir telas referenciadas)
 CREATE TABLE meta_relacionamentos (
     rel_id SERIAL PRIMARY KEY,
-    tela_pai_id INTEGER NOT NULL REFERENCES meta_telas(tela_id),
-    tela_filho_id INTEGER NOT NULL REFERENCES meta_telas(tela_id),
+    tela_pai_id INTEGER NOT NULL REFERENCES meta_telas(tela_id) ON DELETE RESTRICT,
+    tela_filho_id INTEGER NOT NULL REFERENCES meta_telas(tela_id) ON DELETE RESTRICT,
     coluna_chave_pai VARCHAR(100) NOT NULL,
     coluna_chave_filho VARCHAR(100) NOT NULL
 );
 
--- cotacoes
+-- cotacoes (PROIBIDO excluir empresa referenciada)
 CREATE TABLE cotacoes (
     cotacao_id SERIAL PRIMARY KEY,
     empresa_origem_id INTEGER NOT NULL REFERENCES empresas(empresa_id) ON DELETE RESTRICT,
@@ -119,7 +119,7 @@ CREATE TABLE cotacoes (
     destinatario VARCHAR(255)
 );
 
--- cotacao_itens
+-- cotacao_itens (PROIBIDO excluir cotação ou produto referenciado)
 CREATE TABLE cotacao_itens (
     item_id SERIAL PRIMARY KEY,
     cotacao_id INTEGER NOT NULL REFERENCES cotacoes(cotacao_id) ON DELETE RESTRICT,
@@ -127,7 +127,7 @@ CREATE TABLE cotacao_itens (
     quantidade INTEGER NOT NULL
 );
 
--- cotacao_resultados
+-- cotacao_resultados (PROIBIDO excluir cotação referenciada)
 CREATE TABLE cotacao_resultados (
     resultado_id SERIAL PRIMARY KEY,
     cotacao_id INTEGER NOT NULL REFERENCES cotacoes(cotacao_id) ON DELETE RESTRICT,
@@ -189,7 +189,7 @@ SELECT setval('cotacao_itens_item_id_seq', 1, false);
 SELECT setval('cotacao_resultados_resultado_id_seq', 1, false);
 
 -- =================================================
--- Índices
+-- Índices para performance
 -- =================================================
 CREATE INDEX idx_usuarios_username ON dms_usuarios(username);
 CREATE INDEX idx_produtos_codigo ON produtos(codigo);
@@ -198,6 +198,9 @@ CREATE INDEX idx_campos_tela ON meta_campos(tela_id);
 CREATE INDEX idx_acessos_usuario_tela ON dms_acessos(usuario_id, tela_id);
 CREATE INDEX idx_estoque_produto ON estoque_movimentos(produto_id);
 CREATE INDEX idx_estoque_data ON estoque_movimentos(data_movimento);
+CREATE INDEX idx_cotacoes_empresa ON cotacoes(empresa_origem_id);
+CREATE INDEX idx_cotacao_itens_cotacao ON cotacao_itens(cotacao_id);
+CREATE INDEX idx_cotacao_itens_produto ON cotacao_itens(produto_id);
 
 -- =================================================
 -- Grants
@@ -205,3 +208,17 @@ CREATE INDEX idx_estoque_data ON estoque_movimentos(data_movimento);
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dms_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dms_user;
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO dms_user;
+
+-- =================================================
+-- Comentários explicativos sobre as regras
+-- =================================================
+COMMENT ON CONSTRAINT dms_acessos_usuario_id_fkey ON dms_acessos IS 'Não permite excluir usuário que tenha acessos';
+COMMENT ON CONSTRAINT dms_acessos_tela_id_fkey ON dms_acessos IS 'Não permite excluir tela que tenha acessos';
+COMMENT ON CONSTRAINT estoque_movimentos_produto_id_fkey ON estoque_movimentos IS 'Não permite excluir produto que tenha movimentos de estoque';
+COMMENT ON CONSTRAINT estoque_movimentos_usuario_id_fkey ON estoque_movimentos IS 'Não permite excluir usuário que tenha movimentos de estoque';
+COMMENT ON CONSTRAINT cotacoes_empresa_origem_id_fkey ON cotacoes IS 'Não permite excluir empresa que tenha cotações';
+COMMENT ON CONSTRAINT cotacao_itens_cotacao_id_fkey ON cotacao_itens IS 'Não permite excluir cotação que tenha itens';
+COMMENT ON CONSTRAINT cotacao_itens_produto_id_fkey ON cotacao_itens IS 'Não permite excluir produto que esteja em itens de cotação';
+COMMENT ON CONSTRAINT cotacao_resultados_cotacao_id_fkey ON cotacao_resultados IS 'Não permite excluir cotação que tenha resultados';
+COMMENT ON CONSTRAINT meta_relacionamentos_tela_pai_id_fkey ON meta_relacionamentos IS 'Não permite excluir tela que seja pai em relacionamento';
+COMMENT ON CONSTRAINT meta_relacionamentos_tela_filho_id_fkey ON meta_relacionamentos IS 'Não permite excluir tela que seja filho em relacionamento';
