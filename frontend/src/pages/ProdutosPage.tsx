@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import api from '../services/api';
 import { DataGrid } from '@mui/x-data-grid';
-import type { GridColDef } from '@mui/x-data-grid'; // <-- CORREÇÃO AQUI
+import type { GridColDef } from '@mui/x-data-grid/models';
 import { Box, Typography, Button, Avatar, IconButton, TextField, InputAdornment } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -40,8 +40,18 @@ export const ProdutosPage = () => {
         debouncedFetch(e.target.value);
     };
 
-    const handleOpenDialog = (produto: Produto | null = null) => {
-        setEditingProduto(produto);
+    const handleOpenDialog = async (produto: Produto | null = null) => {
+        if (produto && produto.produto_id) {
+            try {
+                const response = await api.get(`/produtos/${produto.produto_id}`);
+                setEditingProduto(response.data);
+            } catch (error) {
+                console.error("Erro ao buscar detalhes do produto", error);
+                return;
+            }
+        } else {
+            setEditingProduto(null);
+        }
         setDialogOpen(true);
     };
 
@@ -91,8 +101,8 @@ export const ProdutosPage = () => {
             renderCell: (params) => <Avatar src={params.value ? `http://localhost:3001${params.value}` : undefined} />
         },
         { field: 'nome', headerName: 'Nome', flex: 1 },
-        { field: 'ean', headerName: 'EAN/DUN', width: 150 },
-        { field: 'peso', headerName: 'Peso (KG)', width: 120 },
+        { field: 'ean', headerName: 'EAN/DUN (Base)', width: 150 },
+        { field: 'peso', headerName: 'Peso (KG Base)', width: 120 },
         {
             field: 'actions',
             type: 'actions',
@@ -116,35 +126,12 @@ export const ProdutosPage = () => {
                     Novo Produto
                 </Button>
             </Box>
-
-            <TextField
-                label="Pesquisar por Código, Nome ou EAN"
-                variant="outlined"
-                fullWidth
-                value={searchText}
-                onChange={handleSearchChange}
-                sx={{ mb: 2 }}
-                InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
-            />
-
+            <TextField label="Pesquisar por Código, Nome ou EAN" variant="outlined" fullWidth value={searchText} onChange={handleSearchChange} sx={{ mb: 2 }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} />
             <Box sx={{ height: '70vh', width: '100%' }}>
                 <DataGrid rows={produtos} columns={columns} getRowId={(row) => row.produto_id} />
             </Box>
-
-            <ProdutoDialog
-                open={isDialogOpen}
-                onClose={handleCloseDialog}
-                onSave={handleSave}
-                produto={editingProduto}
-            />
-
-            <ConfirmationDialog
-                open={confirmOpen}
-                onClose={() => setConfirmOpen(false)}
-                onConfirm={handleDelete}
-                title="Confirmar Exclusão"
-                message={`Tem certeza que deseja excluir o produto "${itemToDelete?.nome}"?`}
-            />
+            <ProdutoDialog open={isDialogOpen} onClose={handleCloseDialog} onSave={handleSave} produto={editingProduto} />
+            <ConfirmationDialog open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={handleDelete} title="Confirmar Exclusão" message={`Tem certeza que deseja excluir o produto "${itemToDelete?.nome}"?`} />
         </Box>
     );
 };

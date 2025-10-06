@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import api from '../services/api';
 import { Box, Typography, List, ListItemButton, ListItemText, Grid, Paper, Checkbox, Button, Dialog, DialogTitle, DialogContent, FormControl, InputLabel, Select, MenuItem, DialogActions, IconButton, TextField, InputAdornment } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
-import type { GridColDef } from '@mui/x-data-grid';
+import type { GridColDef } from '@mui/x-data-grid/models';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
 import debounce from 'lodash.debounce';

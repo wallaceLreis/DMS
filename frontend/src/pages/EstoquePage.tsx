@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import api from '../services/api';
 import { DataGrid } from '@mui/x-data-grid';
-import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
+import type { GridColDef, GridRowParams } from '@mui/x-data-grid/models';
 import { 
     Box, Typography, Button, Dialog, DialogTitle, DialogContent, 
     DialogActions, TextField, FormControl, InputLabel, Select, 
