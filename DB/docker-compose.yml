@@ -18,6 +18,7 @@ services:
     # Garante que os dados não sejam perdidos ao reiniciar/remover o contêiner
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init_database.sql:/docker-entrypoint-initdb.d/init_database.sql
 
 # Define o volume nomeado para persistir os dados
 volumes:

@@ -22,7 +22,6 @@ build/
 coverage/
 
 # Arquivos de dump de banco de dados (segurança e tamanho)
-*.sql
 *.dump
 
 # Arquivos gerados pelo Docker para ambiente local
