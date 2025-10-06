@@ -20,13 +20,11 @@ export const getCotacoes = async (req: Request, res: Response) => {
 export const getCotacaoById = async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
-        // CORREÇÃO: Usando 'pool' em vez de 'client'
         const cotacaoRes = await pool.query('SELECT * FROM cotacoes WHERE cotacao_id = $1', [id]);
         if (cotacaoRes.rowCount === 0) {
             return res.status(404).json({ message: "Cotação não encontrada" });
         }
 
-        // CORREÇÃO: Usando 'pool' em vez de 'client'
         const resultadosRes = await pool.query('SELECT * FROM cotacao_resultados WHERE cotacao_id = $1 ORDER BY preco ASC', [id]);
         
         const cotacao = cotacaoRes.rows[0];
@@ -56,11 +54,11 @@ export const createCotacao = async (req: Request, res: Response) => {
         const produtosRes = await client.query('SELECT * FROM produtos WHERE produto_id = ANY($1::int[])', [produtoIds]);
         const empresaRes = await client.query('SELECT cep FROM empresas WHERE empresa_id = $1', [empresa_origem_id]);
         
-        const produtosMap = new Map(produtosRes.rows.map(p => [p.produto_id, p]));
+        const produtosMap = new Map(produtosRes.rows.map((p: any) => [p.produto_id, p]));
 
         const requestBody = {
             from: { postal_code: empresaRes.rows[0].cep.replace(/\D/g, '') },
-            to: { postal_code: cep_destino.replace(/\D/g, '') },
+            to: { postal_code: cep_destino.replace(/\D/g, '') }, // <-- CORREÇÃO AQUI
             products: itens.map((item: any) => {
                 const produto = produtosMap.get(item.produto_id);
                 return {
