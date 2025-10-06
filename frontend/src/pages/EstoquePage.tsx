@@ -1,19 +1,19 @@
 import { useEffect, useState, useMemo } from 'react';
 import api from '../services/api';
 import { DataGrid } from '@mui/x-data-grid';
+// CORREÇÃO 1: Separando a importação do componente e dos tipos
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid/models';
 import { 
     Box, Typography, Button, Dialog, DialogTitle, DialogContent, 
-    DialogActions, TextField, FormControl, InputLabel, Select, 
-    MenuItem, InputAdornment 
+    DialogActions, TextField, InputAdornment, Autocomplete, CircularProgress 
 } from '@mui/material';
-import type { SelectChangeEvent } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import debounce from 'lodash.debounce';
 
-// --- Interfaces para Tipagem ---
+// --- Interfaces ---
 interface Produto {
     produto_id: number;
+    codigo: number;
     nome: string;
 }
 
@@ -31,12 +31,19 @@ interface MovimentoState {
     numero_nota?: string;
 }
 
+interface MovimentoHistorico {
+    movimento_id: number;
+    numero_nota: string;
+    quantidade: number;
+    data_movimento: string;
+}
+
 interface DetailData {
     codigo: number;
     nome: string;
     quantidade_atual: number;
     ultimo_lancamento: string;
-    historico: any[];
+    historico: MovimentoHistorico[];
 }
 
 export const EstoquePage = () => {
@@ -45,6 +52,11 @@ export const EstoquePage = () => {
     const [isDialogOpen, setDialogOpen] = useState(false);
     const [movimento, setMovimento] = useState<MovimentoState>({ tipo_movimento: 'ENTRADA', produto_id: '', quantidade: '' });
     const [searchText, setSearchText] = useState('');
+    
+    const [selectedProduto, setSelectedProduto] = useState<Produto | null>(null);
+    const [codigoInput, setCodigoInput] = useState('');
+    const [loadingProduto, setLoadingProduto] = useState(false);
+
     const [isDetailOpen, setDetailOpen] = useState(false);
     const [detailData, setDetailData] = useState<DetailData | null>(null);
 
@@ -63,20 +75,22 @@ export const EstoquePage = () => {
         fetchEstoque();
         api.get('/produtos').then(res => setProdutos(res.data));
     }, []);
-
+    
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSearchText(e.target.value);
         debouncedFetchEstoque(e.target.value);
     };
-
+    
     const handleOpenDialog = (tipo: 'ENTRADA' | 'SAIDA') => {
         setMovimento({ tipo_movimento: tipo, produto_id: '', quantidade: '', numero_nota: '' });
+        setSelectedProduto(null);
+        setCodigoInput('');
         setDialogOpen(true);
     };
 
     const handleCloseDialog = () => setDialogOpen(false);
 
-    const handleMovimentoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<number | ''>) => {
+    const handleMovimentoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setMovimento({ ...movimento, [e.target.name]: e.target.value });
     };
 
@@ -105,6 +119,26 @@ export const EstoquePage = () => {
         }
     };
 
+    const handleCodeSearch = async () => {
+        if (!codigoInput) return;
+        setLoadingProduto(true);
+        try {
+            const response = await api.get(`/produtos?q=${codigoInput}`);
+            if (response.data.length === 1) {
+                const produtoEncontrado = response.data[0];
+                setSelectedProduto(produtoEncontrado);
+                setMovimento({ ...movimento, produto_id: produtoEncontrado.produto_id });
+            } else {
+                setSelectedProduto(null);
+                setMovimento({ ...movimento, produto_id: '' });
+            }
+        } catch (error) {
+            console.error("Erro ao buscar produto por código", error);
+        } finally {
+            setLoadingProduto(false);
+        }
+    };
+    
     const columns: GridColDef[] = [
         { field: 'codigo', headerName: 'Código', width: 130 },
         { field: 'nome', headerName: 'Produto', flex: 1 },
@@ -128,12 +162,8 @@ export const EstoquePage = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h4">Controle de Estoque</Typography>
                 <Box>
-                    <Button variant="contained" color="success" onClick={() => handleOpenDialog('ENTRADA')} sx={{ mr: 1 }}>
-                        Adicionar Estoque
-                    </Button>
-                    <Button variant="contained" color="error" onClick={() => handleOpenDialog('SAIDA')}>
-                        Baixar Estoque
-                    </Button>
+                    <Button variant="contained" color="success" onClick={() => handleOpenDialog('ENTRADA')} sx={{ mr: 1 }}>Adicionar Estoque</Button>
+                    <Button variant="contained" color="error" onClick={() => handleOpenDialog('SAIDA')}>Baixar Estoque</Button>
                 </Box>
             </Box>
 
@@ -148,24 +178,56 @@ export const EstoquePage = () => {
             />
 
             <Box sx={{ height: '65vh', width: '100%' }}>
-                <DataGrid rows={estoque} columns={columns} getRowId={(row) => row.produto_id} onRowDoubleClick={handleRowDoubleClick} />
+                {/* CORREÇÃO 2: Adicionando o tipo ao parâmetro 'row' */}
+                <DataGrid rows={estoque} columns={columns} getRowId={(row: EstoqueItem) => row.produto_id} onRowDoubleClick={handleRowDoubleClick} />
             </Box>
 
-            <Dialog open={isDialogOpen} onClose={handleCloseDialog}>
+            <Dialog open={isDialogOpen} onClose={handleCloseDialog} fullWidth>
                 <DialogTitle>{movimento.tipo_movimento === 'ENTRADA' ? 'Registrar Entrada com Nota' : 'Registrar Saída'}</DialogTitle>
                 <DialogContent sx={{ pt: '20px !important' }}>
-                    <FormControl fullWidth margin="normal">
-                        <InputLabel id="produto-select-label">Produto *</InputLabel>
-                        <Select
-                            labelId="produto-select-label"
-                            name="produto_id"
-                            value={movimento.produto_id}
-                            label="Produto *"
-                            onChange={handleMovimentoChange}
-                        >
-                            {produtos.map(p => <MenuItem key={p.produto_id} value={p.produto_id}>{p.nome}</MenuItem>)}
-                        </Select>
-                    </FormControl>
+                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', mt: 2 }}>
+                        <TextField
+                            label="Código *"
+                            variant="outlined"
+                            value={codigoInput}
+                            onChange={(e) => {
+                                setCodigoInput(e.target.value);
+                                if (selectedProduto && e.target.value !== String(selectedProduto.codigo)) {
+                                    setSelectedProduto(null);
+                                    setMovimento({ ...movimento, produto_id: '' });
+                                }
+                            }}
+                            onBlur={handleCodeSearch}
+                            onKeyDown={(e) => e.key === 'Enter' && handleCodeSearch()}
+                            sx={{ width: '200px' }}
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        {loadingProduto ? <CircularProgress size={20} /> : <SearchIcon />}
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
+                        <Autocomplete
+                            fullWidth
+                            options={produtos}
+                            getOptionLabel={(option) => option.nome || ''}
+                            value={selectedProduto}
+                            onChange={(_event, newValue) => {
+                                setSelectedProduto(newValue);
+                                if (newValue) {
+                                    setCodigoInput(String(newValue.codigo));
+                                    setMovimento({ ...movimento, produto_id: newValue.produto_id });
+                                } else {
+                                    setCodigoInput('');
+                                    setMovimento({ ...movimento, produto_id: '' });
+                                }
+                            }}
+                            isOptionEqualToValue={(option, value) => option.produto_id === value.produto_id}
+                            renderInput={(params) => <TextField {...params} label="Nome do Produto *" />}
+                        />
+                    </Box>
+
                     {movimento.tipo_movimento === 'ENTRADA' &&
                         <TextField name="numero_nota" label="Número da Nota de Origem" fullWidth margin="normal" value={movimento.numero_nota || ''} onChange={handleMovimentoChange}/>
                     }
@@ -189,7 +251,8 @@ export const EstoquePage = () => {
                         <DialogContent>
                             <Typography variant="subtitle1" gutterBottom>Histórico de Entradas</Typography>
                             <Box sx={{ height: 400, width: '100%' }}>
-                                <DataGrid rows={detailData.historico} columns={historicoColumns} getRowId={(row) => row.movimento_id} />
+                                {/* CORREÇÃO 3: Adicionando o tipo ao parâmetro 'row' */}
+                                <DataGrid rows={detailData.historico} columns={historicoColumns} getRowId={(row: MovimentoHistorico) => row.movimento_id} />
                             </Box>
                         </DialogContent>
                         <DialogActions>
