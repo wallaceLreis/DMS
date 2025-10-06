@@ -19,14 +19,10 @@ export const MainLayout = () => {
     const [passwordError, setPasswordError] = useState('');
 
     useEffect(() => {
-        // --- LÓGICA DE CORREÇÃO AQUI ---
-        // Verifica se a URL atual corresponde a alguma aba aberta antes de marcá-la como ativa.
         const tabExists = openTabs.some(tab => tab.value === location.pathname);
         if (tabExists) {
             setActiveTab(location.pathname);
         }
-        // Se não existir (como no caso da rota '/'), ele não faz nada,
-        // o que impede o erro e permite que o redirecionamento do roteador funcione.
     }, [location.pathname, openTabs, setActiveTab]);
     
     const isMenuOpen = Boolean(anchorEl);
@@ -58,6 +54,11 @@ export const MainLayout = () => {
         }
     };
 
+    // CORREÇÃO: menuItems foi movido para dentro do TabsContext/HomePage.
+    // Esta lista é apenas para o menu de abas fixo, se necessário, mas a lógica principal
+    // agora é dinâmica baseada nas permissões do usuário.
+    // Para simplificar e corrigir, vamos usar a lógica dinâmica do TabsContext.
+    
     const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
         navigate(newValue);
     };

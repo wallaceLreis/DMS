@@ -9,7 +9,9 @@ import { AcessosPage } from '../pages/AcessosPage';
 import { DicionarioPage } from '../pages/DicionarioPage';
 import { UsuariosPage } from '../pages/UsuariosPage';
 import { ProdutosPage } from '../pages/ProdutosPage';
-import { EstoquePage } from '../pages/EstoquePage'; // Importa a nova página de Estoque
+import { EstoquePage } from '../pages/EstoquePage';
+import { CotacaoFretePage } from '../pages/CotacaoFretePage';
+import { EmpresasPage } from '../pages/EmpresasPage'; // Importa a nova página
 
 const ProtectedRoute = () => {
   const { token } = useAuth();
@@ -33,7 +35,9 @@ export const routerConfig: RouteObject[] = [
         { path: 'usuarios', element: <UsuariosPage /> },
         { path: 'acessos', element: <AcessosPage /> },
         { path: 'produtos', element: <ProdutosPage /> },
-        { path: 'estoque', element: <EstoquePage /> }, // <-- NOVA ROTA ADICIONADA
+        { path: 'estoque', element: <EstoquePage /> },
+        { path: 'cotacao-frete', element: <CotacaoFretePage /> },
+        { path: 'empresas', element: <EmpresasPage /> }, // <-- NOVA ROTA ADICIONADA
         
         // Rota genérica para telas dinâmicas
         { path: 'tela/:tableName', element: <GenericScreenPage /> },
