@@ -1,15 +1,28 @@
 import { Request, Response } from 'express';
 import pool from '../config/db';
-import bcrypt from 'bcryptjs'; // Garantido que está usando bcryptjs
+import bcrypt from 'bcryptjs';
 
 interface AuthRequest extends Request {
   user?: { id: number; username: string; role: string };
 }
 
 export const getUsuarios = async (req: Request, res: Response) => {
-    const result = await pool.query('SELECT usuario_id, username, role, ativo, is_nativo FROM dms_usuarios ORDER BY username');
-    res.json(result.rows);
+    const searchTerm = req.query.q ? `%${String(req.query.q)}%` : '%';
+    const query = `
+        SELECT usuario_id, username, role, ativo, is_nativo 
+        FROM dms_usuarios 
+        WHERE username ILIKE $1 
+        ORDER BY username
+    `;
+    try {
+        const result = await pool.query(query, [searchTerm]);
+        res.json(result.rows);
+    } catch (error) {
+        console.error("Erro ao buscar usuários:", error);
+        res.status(500).json({ message: "Erro ao buscar usuários." });
+    }
 };
+
 export const createUsuario = async (req: Request, res: Response) => {
     const { username, password, role } = req.body;
     const salt = await bcrypt.genSalt(10);
@@ -20,6 +33,7 @@ export const createUsuario = async (req: Request, res: Response) => {
     );
     res.status(201).json(result.rows[0]);
 };
+
 export const deleteUsuario = async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
@@ -34,6 +48,7 @@ export const deleteUsuario = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Erro ao deletar usuário.' });
     }
 };
+
 export const changePassword = async (req: AuthRequest, res: Response) => {
     const { currentPassword, newPassword } = req.body;
     const usuario_id = req.user?.id;
@@ -59,6 +74,7 @@ export const changePassword = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ message: 'Erro interno ao alterar a senha.' });
     }
 };
+
 export const getMenuForCurrentUser = async (req: AuthRequest, res: Response) => {
     const { id, role } = req.user!;
     try {

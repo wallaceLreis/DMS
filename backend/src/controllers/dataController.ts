@@ -1,4 +1,3 @@
-// backend/src/controllers/dataController.ts
 import { Request, Response } from 'express';
 import pool from '../config/db';
 
@@ -10,17 +9,19 @@ const isTableAllowed = async (tableName: string): Promise<boolean> => {
     return (result.rowCount ?? 0) > 0;
 };
 
-
 export const getGenericData = async (req: Request, res: Response) => {
     const { tableName } = req.params;
+    const searchTerm = req.query.q ? `%${String(req.query.q)}%` : '%';
 
     if (!/^[a-zA-Z0-9_]+$/.test(tableName) || !(await isTableAllowed(tableName))) {
         return res.status(403).json({ message: 'Acesso negado a esta tabela.' });
     }
 
     try {
-        const query = `SELECT * FROM ${tableName}`;
-        const result = await pool.query(query);
+        // Constrói a query dinamicamente para incluir a busca
+        // A cláusula table_name::text ILIKE $1 é um truque do PostgreSQL para buscar em todas as colunas
+        const query = `SELECT * FROM ${tableName} WHERE ${tableName}::text ILIKE $1`;
+        const result = await pool.query(query, [searchTerm]);
         res.status(200).json(result.rows);
     } catch (error) {
         console.error(error);
@@ -28,19 +29,15 @@ export const getGenericData = async (req: Request, res: Response) => {
     }
 };
 
-// NOVA FUNÇÃO
 export const deleteGenericData = async (req: Request, res: Response) => {
     const { tableName, id } = req.params;
 
-    // A validação de permissão já foi feita pelo middleware 'protect'
     if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
         return res.status(400).json({ message: 'Nome de tabela inválido.' });
     }
 
     try {
-        // Assume que a chave primária da tabela se chama 'id'
-        // Em um sistema mais complexo, o nome da chave primária viria dos metadados
-        const query = `DELETE FROM ${tableName} WHERE id = $1`;
+        const query = `DELETE FROM ${tableName} WHERE id = $1`; // Assume que a chave primária é 'id'
         const result = await pool.query(query, [id]);
         
         if (result.rowCount === 0) {

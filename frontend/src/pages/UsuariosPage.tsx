@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import api from '../services/api';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
-import { Box, Typography, Button, Modal, TextField, IconButton } from '@mui/material';
+import { Box, Typography, Button, Modal, TextField, IconButton, InputAdornment } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SearchIcon from '@mui/icons-material/Search';
+import debounce from 'lodash.debounce';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 
 const style = {
@@ -25,19 +27,27 @@ export const UsuariosPage = () => {
     const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' });
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState<any>(null);
+    const [searchText, setSearchText] = useState('');
 
-    const fetchUsuarios = async () => {
+    const fetchUsuarios = async (query = '') => {
         try {
-            const response = await api.get('/usuarios');
+            const response = await api.get(`/usuarios?q=${query}`);
             setUsuarios(response.data);
         } catch (error) {
             console.error("Erro ao buscar usuários:", error);
         }
     };
 
+    const debouncedFetch = useMemo(() => debounce(fetchUsuarios, 300), []);
+
     useEffect(() => {
         fetchUsuarios();
     }, []);
+    
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchText(e.target.value);
+        debouncedFetch(e.target.value);
+    };
 
     const handleOpen = () => setOpen(true);
     const handleClose = () => setOpen(false);
@@ -59,29 +69,15 @@ export const UsuariosPage = () => {
         setConfirmOpen(true);
     };
 
-    // FUNÇÃO handleDelete COMPLETA E CORRIGIDA
     const handleDelete = async () => {
         if (!itemToDelete) return;
-
         try {
-            console.log(`Tentando excluir o usuário com ID: ${itemToDelete.usuario_id}`); // Log de depuração
-            
-            // 1. Tenta executar a exclusão
             await api.delete(`/usuarios/${itemToDelete.usuario_id}`);
-            
-            console.log("Usuário excluído com sucesso!"); // Log de depuração
-            
-            // 2. Se a exclusão for bem-sucedida, atualiza a lista de usuários
             fetchUsuarios();
-
         } catch (error) {
-            // 3. Se ocorrer um erro na API, ele será capturado aqui
             console.error("Falha ao excluir o usuário:", error);
-            alert("Ocorreu um erro ao excluir o usuário. Verifique o console para mais detalhes.");
-            
+            alert("Ocorreu um erro ao excluir o usuário.");
         } finally {
-            // 4. Este bloco é executado SEMPRE, seja em caso de sucesso ou falha
-            // Garantindo que o dialog de confirmação sempre feche
             setItemToDelete(null);
             setConfirmOpen(false);
         }
@@ -110,9 +106,21 @@ export const UsuariosPage = () => {
                 <Typography variant="h4">Gestão de Usuários</Typography>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpen}>Novo Usuário</Button>
             </Box>
+            
+            <TextField
+                label="Pesquisar por Nome de Usuário"
+                variant="outlined"
+                fullWidth
+                value={searchText}
+                onChange={handleSearchChange}
+                sx={{ mb: 2 }}
+                InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
+            />
+
             <Box sx={{ height: '70vh', width: '100%' }}>
                 <DataGrid rows={usuarios} columns={columns} getRowId={(row) => row.usuario_id} />
             </Box>
+            
             <Modal open={open} onClose={handleClose}>
                 <Box sx={style}>
                     <Typography variant="h6">Novo Usuário</Typography>
