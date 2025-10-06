@@ -5,7 +5,7 @@ node_modules/
 dist/
 
 # Variáveis de ambiente
-.env
+
 
 # Logs
 npm-debug.log*
