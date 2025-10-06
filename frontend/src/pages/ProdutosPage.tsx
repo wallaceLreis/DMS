@@ -40,8 +40,18 @@ export const ProdutosPage = () => {
         debouncedFetch(e.target.value);
     };
 
-    const handleOpenDialog = (produto: Produto | null = null) => {
-        setEditingProduto(produto);
+    const handleOpenDialog = async (produto: Produto | null = null) => {
+        if (produto && produto.produto_id) {
+            try {
+                const response = await api.get(`/produtos/${produto.produto_id}`);
+                setEditingProduto(response.data);
+            } catch (error) {
+                console.error("Erro ao buscar detalhes do produto", error);
+                return;
+            }
+        } else {
+            setEditingProduto(null);
+        }
         setDialogOpen(true);
     };
 

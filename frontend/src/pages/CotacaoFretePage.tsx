@@ -1,72 +1,86 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { Box, Typography, Button, TextField, Grid, Card, CardContent, CircularProgress, Avatar } from '@mui/material';
+import { Box, Typography, Button, CircularProgress, Chip } from '@mui/material';
+import { DataGrid } from '@mui/x-data-grid';
+import type { GridColDef } from '@mui/x-data-grid/models';
+import AddIcon from '@mui/icons-material/Add';
+import { CotacaoDialog } from '../components/CotacaoDialog';
+
+interface Cotacao {
+    cotacao_id: number;
+    empresa_origem: string;
+    destinatario: string;
+    cep_destino: string;
+    data_criacao: string;
+    status: 'PROCESSANDO' | 'CONCLUIDO' | 'ERRO';
+}
 
 export const CotacaoFretePage = () => {
-    const [formData, setFormData] = useState({
-        from_postal_code: '96020360', to_postal_code: '01018020',
-        width: '11', height: '17', length: '11', weight: '0.3', insurance_value: '10.1'
-    });
-    const [cotacoes, setCotacoes] = useState<any[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [cotacoes, setCotacoes] = useState<Cotacao[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isDialogOpen, setDialogOpen] = useState(false);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
-    const handleCalcular = async () => {
+    const fetchCotacoes = async () => {
         setLoading(true);
-        setCotacoes([]);
         try {
-            const response = await api.post('/frete/calcular', formData);
+            const response = await api.get('/frete/cotacoes');
             setCotacoes(response.data);
         } catch (error) {
-            console.error("Erro ao calcular frete:", error);
-            alert("Não foi possível calcular o frete.");
+            console.error(error);
         } finally {
             setLoading(false);
         }
     };
 
+    useEffect(() => { fetchCotacoes(); }, []);
+    
+    const handleSave = async (data: any) => {
+        setDialogOpen(false);
+        const tempCotacao: Cotacao = { 
+            status: 'PROCESSANDO', 
+            data_criacao: new Date().toISOString(), 
+            cotacao_id: Date.now(),
+            empresa_origem: 'Aguardando...',
+            destinatario: data.destinatario,
+            cep_destino: data.cep_destino,
+        };
+        setCotacoes(prev => [tempCotacao, ...prev]);
+
+        try {
+            await api.post('/frete/cotacoes', data);
+        } catch (error) {
+            console.error("Falha ao processar cotação:", error);
+            alert("Falha ao processar cotação.");
+        } finally {
+            fetchCotacoes();
+        }
+    };
+
+    const columns: GridColDef[] = [
+        { field: 'cotacao_id', headerName: 'ID', width: 90 },
+        { field: 'destinatario', headerName: 'Destinatário', flex: 1 },
+        { field: 'empresa_origem', headerName: 'Origem', flex: 1 },
+        { field: 'cep_destino', headerName: 'CEP Destino', width: 150 },
+        { field: 'data_criacao', headerName: 'Data', width: 180, type: 'dateTime', valueFormatter: (value) => value ? new Date(value).toLocaleString('pt-BR') : '' },
+        { field: 'status', headerName: 'Status', width: 150, renderCell: (params) => (
+            params.value === 'PROCESSANDO' 
+                ? <CircularProgress size={20} /> 
+                : <Chip label={params.value} color={params.value === 'CONCLUIDO' ? 'success' : 'error'} />
+        )},
+    ];
+
     return (
         <Box>
-            <Typography variant="h4" gutterBottom>Cotação de Frete</Typography>
-            <Grid container spacing={2} sx={{ mb: 4 }}>
-                <Grid item xs={6} md={3}><TextField name="from_postal_code" label="CEP Origem" value={formData.from_postal_code} onChange={handleChange} fullWidth /></Grid>
-                <Grid item xs={6} md={3}><TextField name="to_postal_code" label="CEP Destino" value={formData.to_postal_code} onChange={handleChange} fullWidth /></Grid>
-                <Grid item xs={6} md={3}><TextField name="insurance_value" label="Valor Segurado (R$)" value={formData.insurance_value} onChange={handleChange} type="number" fullWidth /></Grid>
-                <Grid item xs={6} md={3}><TextField name="weight" label="Peso (KG)" value={formData.weight} onChange={handleChange} type="number" fullWidth /></Grid>
-                <Grid item xs={4} md={2}><TextField name="height" label="Altura (CM)" value={formData.height} onChange={handleChange} type="number" fullWidth /></Grid>
-                <Grid item xs={4} md={2}><TextField name="width" label="Largura (CM)" value={formData.width} onChange={handleChange} type="number" fullWidth /></Grid>
-                <Grid item xs={4} md={2}><TextField name="length" label="Comprimento (CM)" value={formData.length} onChange={handleChange} type="number" fullWidth /></Grid>
-                <Grid item xs={12} md={6}>
-                    <Button onClick={handleCalcular} variant="contained" size="large" fullWidth disabled={loading}>
-                        {loading ? <CircularProgress size={24} /> : 'Calcular Frete'}
-                    </Button>
-                </Grid>
-            </Grid>
-
-            {cotacoes.length > 0 && (
-                <Box>
-                    <Typography variant="h5" gutterBottom>Resultados</Typography>
-                    <Grid container spacing={2}>
-                        {cotacoes.map(cotacao => (
-                            <Grid item xs={12} md={6} lg={4} key={cotacao.id}>
-                                <Card variant="outlined">
-                                    <CardContent>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                            <Avatar src={cotacao.company.picture} sx={{ mr: 2 }} />
-                                            <Typography variant="h6">{cotacao.company.name} - {cotacao.name}</Typography>
-                                        </Box>
-                                        <Typography variant="h4" color="primary">R$ {cotacao.price}</Typography>
-                                        <Typography color="text.secondary">Prazo de entrega: {cotacao.delivery_time} dias</Typography>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
-                        ))}
-                    </Grid>
-                </Box>
-            )}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h4">Cotações de Frete</Typography>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+                    Nova Cotação
+                </Button>
+            </Box>
+            <Box sx={{ height: '70vh', width: '100%' }}>
+                <DataGrid rows={cotacoes} columns={columns} loading={loading} getRowId={(row: Cotacao) => row.cotacao_id} />
+            </Box>
+            <CotacaoDialog open={isDialogOpen} onClose={() => setDialogOpen(false)} onSave={handleSave} />
         </Box>
     );
 };
