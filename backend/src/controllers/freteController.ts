@@ -4,7 +4,6 @@ import pool from '../config/db';
 
 export const getCotacoes = async (req: Request, res: Response) => {
     try {
-        // Adicionado c.destinatario ao SELECT
         const query = `
             SELECT c.cotacao_id, c.destinatario, c.cep_destino, c.status, c.data_criacao, e.nome_fantasia as empresa_origem
             FROM cotacoes c
@@ -19,28 +18,44 @@ export const getCotacoes = async (req: Request, res: Response) => {
 };
 
 export const getCotacaoById = async (req: Request, res: Response) => {
-    // ... (código existente, sem alterações)
+    const { id } = req.params;
+    try {
+        // CORREÇÃO: Usando 'pool' em vez de 'client'
+        const cotacaoRes = await pool.query('SELECT * FROM cotacoes WHERE cotacao_id = $1', [id]);
+        if (cotacaoRes.rowCount === 0) {
+            return res.status(404).json({ message: "Cotação não encontrada" });
+        }
+
+        // CORREÇÃO: Usando 'pool' em vez de 'client'
+        const resultadosRes = await pool.query('SELECT * FROM cotacao_resultados WHERE cotacao_id = $1 ORDER BY preco ASC', [id]);
+        
+        const cotacao = cotacaoRes.rows[0];
+        cotacao.resultados = resultadosRes.rows;
+
+        res.json(cotacao);
+    } catch (error) {
+        console.error("Erro ao buscar detalhes da cotação:", error);
+        res.status(500).json({ message: "Erro ao buscar detalhes da cotação." });
+    }
 };
 
 export const createCotacao = async (req: Request, res: Response) => {
-    // Adicionado 'destinatario' à desestruturação
     const { empresa_origem_id, cep_destino, itens, destinatario } = req.body;
     const client = await pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // Adicionado 'destinatario' ao INSERT
         const cotacaoRes = await client.query(
             'INSERT INTO cotacoes (empresa_origem_id, cep_destino, status, destinatario) VALUES ($1, $2, $3, $4) RETURNING *',
             [empresa_origem_id, cep_destino, 'PROCESSANDO', destinatario]
         );
         const novaCotacao = cotacaoRes.rows[0];
 
-        // O restante da lógica permanece o mesmo...
         const produtoIds = itens.map((item: any) => item.produto_id);
         const produtosRes = await client.query('SELECT * FROM produtos WHERE produto_id = ANY($1::int[])', [produtoIds]);
         const empresaRes = await client.query('SELECT cep FROM empresas WHERE empresa_id = $1', [empresa_origem_id]);
+        
         const produtosMap = new Map(produtosRes.rows.map(p => [p.produto_id, p]));
 
         const requestBody = {
