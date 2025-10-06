@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { protect } from '../middleware/authMiddleware';
-import { getEstoqueAtual, createMovimento } from '../controllers/estoqueController';
+import { getEstoqueAtual, createMovimento, getMovimentosPorProduto } from '../controllers/estoqueController';
 
 const router = Router();
 router.use(protect);
@@ -10,5 +10,9 @@ router.route('/')
 
 router.route('/movimento')
     .post(createMovimento);
+
+// NOVA ROTA
+router.route('/:produto_id/movimentos')
+    .get(getMovimentosPorProduto);
 
 export default router;

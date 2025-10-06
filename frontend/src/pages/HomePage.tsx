@@ -41,10 +41,10 @@ export const HomePage = () => {
     }, [user]);
 
     const handleOpenScreen = (tela: TelaDisponivel) => {
-        // CORREÇÃO AQUI: Adicionado 'produtos' à lista de telas base
-        const baseScreens = ['dicionario', 'usuarios', 'acessos', 'produtos'];
+        // Esta lista garante que telas customizadas naveguem para a rota correta
+        const specialScreens = ['dicionario', 'usuarios', 'acessos', 'produtos', 'estoque'];
         
-        const path = baseScreens.includes(tela.nome_tabela)
+        const path = specialScreens.includes(tela.nome_tabela)
             ? `/${tela.nome_tabela}`
             : `/tela/${tela.nome_tabela}`;
         

@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import api from '../services/api';
-import { Box, Typography, List, ListItemButton, ListItemText, Grid, Paper, Checkbox, Button, Dialog, DialogTitle, DialogContent, FormControl, InputLabel, Select, MenuItem, DialogActions, IconButton } from '@mui/material';
+import { Box, Typography, List, ListItemButton, ListItemText, Grid, Paper, Checkbox, Button, Dialog, DialogTitle, DialogContent, FormControl, InputLabel, Select, MenuItem, DialogActions, IconButton, TextField, InputAdornment } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SearchIcon from '@mui/icons-material/Search';
+import debounce from 'lodash.debounce';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 
 interface Tela {
@@ -32,6 +34,28 @@ export const AcessosPage = () => {
     const [newAcesso, setNewAcesso] = useState({ usuario_id: '', pode_incluir: false, pode_alterar: false, pode_excluir: false });
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState<Acesso | null>(null);
+    const [searchText, setSearchText] = useState('');
+    
+    const fetchTelas = async (query = '') => {
+        try {
+            const res = await api.get(`/telas?q=${query}`);
+            setTelas(res.data);
+        } catch (error) {
+            console.error("Erro ao buscar telas:", error);
+        }
+    };
+    
+    const debouncedFetch = useMemo(() => debounce(fetchTelas, 300), []);
+
+    useEffect(() => {
+        fetchTelas();
+        api.get('/usuarios').then(res => setUsuarios(res.data.filter((u: any) => u.role !== 'sup')));
+    }, []);
+    
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchText(e.target.value);
+        debouncedFetch(e.target.value);
+    };
 
     const fetchAcessos = async (telaId: number) => {
         try {
@@ -41,11 +65,6 @@ export const AcessosPage = () => {
             console.error("Erro ao buscar acessos", error);
         }
     };
-
-    useEffect(() => {
-        api.get('/telas').then(res => setTelas(res.data));
-        api.get('/usuarios').then(res => setUsuarios(res.data.filter((u: any) => u.role !== 'sup')));
-    }, []);
 
     useEffect(() => {
         if (selectedTela) {
@@ -75,7 +94,6 @@ export const AcessosPage = () => {
             await api.put(`/acessos/${acesso.acesso_id}`, updatedAcesso);
         } catch (error) {
             console.error("Erro ao atualizar permissão", error);
-            // Reverte a alteração visual em caso de erro na API
             if (selectedTela) await fetchAcessos(selectedTela.tela_id);
         }
     };
@@ -100,33 +118,22 @@ export const AcessosPage = () => {
     
     const columns: GridColDef[] = [
         { field: 'username', headerName: 'Usuário', flex: 1 },
-        { 
-            field: 'pode_incluir', headerName: 'Incluir', width: 100,
-            renderCell: (params) => <Checkbox checked={params.value} onChange={(e) => handlePermissionChange(params.row, 'pode_incluir', e.target.checked)} /> 
-        },
-        { 
-            field: 'pode_alterar', headerName: 'Alterar', width: 100,
-            renderCell: (params) => <Checkbox checked={params.value} onChange={(e) => handlePermissionChange(params.row, 'pode_alterar', e.target.checked)} /> 
-        },
-        { 
-            field: 'pode_excluir', headerName: 'Excluir', width: 100,
-            renderCell: (params) => <Checkbox checked={params.value} onChange={(e) => handlePermissionChange(params.row, 'pode_excluir', e.target.checked)} /> 
-        },
-        {
-            field: 'actions', type: 'actions', headerName: 'Ações', width: 80,
-            renderCell: (params) => (
-                <IconButton onClick={() => openConfirmDialog(params.row)}>
-                    <DeleteIcon />
-                </IconButton>
-            )
-        }
+        { field: 'pode_incluir', headerName: 'Incluir', width: 100,
+          renderCell: (params) => <Checkbox checked={params.value} onChange={(e) => handlePermissionChange(params.row, 'pode_incluir', e.target.checked)} /> },
+        { field: 'pode_alterar', headerName: 'Alterar', width: 100,
+          renderCell: (params) => <Checkbox checked={params.value} onChange={(e) => handlePermissionChange(params.row, 'pode_alterar', e.target.checked)} /> },
+        { field: 'pode_excluir', headerName: 'Excluir', width: 100,
+          renderCell: (params) => <Checkbox checked={params.value} onChange={(e) => handlePermissionChange(params.row, 'pode_excluir', e.target.checked)} /> },
+        { field: 'actions', type: 'actions', headerName: 'Ações', width: 80,
+          renderCell: (params) => ( <IconButton onClick={() => openConfirmDialog(params.row)}><DeleteIcon /></IconButton> ) }
     ];
 
     return (
         <Grid container spacing={2} sx={{ height: '80vh' }}>
             <Grid item xs={4}>
                 <Typography variant="h6">Telas do Sistema</Typography>
-                <Paper style={{ height: '100%', overflow: 'auto' }}>
+                <TextField label="Pesquisar Tela" variant="outlined" fullWidth size="small" value={searchText} onChange={handleSearchChange} sx={{ my: 1 }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}/>
+                <Paper style={{ height: 'calc(100% - 60px)', overflow: 'auto' }}>
                     <List component="nav">
                         {telas.map(tela => (
                             <ListItemButton key={tela.tela_id} selected={selectedTela?.tela_id === tela.tela_id} onClick={() => setSelectedTela(tela)}>
@@ -136,21 +143,15 @@ export const AcessosPage = () => {
                     </List>
                 </Paper>
             </Grid>
-
             <Grid item xs={8}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Typography variant="h6">
-                        Permissões para: {selectedTela ? selectedTela.titulo_tela : 'Nenhuma tela selecionada'}
-                    </Typography>
-                    <Button variant="contained" onClick={() => setDialogOpen(true)} disabled={!selectedTela}>
-                        Adicionar Acesso
-                    </Button>
+                    <Typography variant="h6"> Permissões para: {selectedTela ? selectedTela.titulo_tela : 'Nenhuma tela selecionada'} </Typography>
+                    <Button variant="contained" onClick={() => setDialogOpen(true)} disabled={!selectedTela}> Adicionar Acesso </Button>
                 </Box>
                 <Paper style={{ height: '100%', width: '100%' }}>
                     <DataGrid rows={acessos} columns={columns} getRowId={(row) => row.acesso_id} />
                 </Paper>
             </Grid>
-
             <Dialog open={isDialogOpen} onClose={() => setDialogOpen(false)}>
                 <DialogTitle>Adicionar Acesso para {selectedTela?.titulo_tela}</DialogTitle>
                 <DialogContent>
@@ -171,14 +172,7 @@ export const AcessosPage = () => {
                     <Button onClick={handleSaveNewAcesso} variant="contained">Salvar</Button>
                 </DialogActions>
             </Dialog>
-
-            <ConfirmationDialog
-                open={confirmOpen}
-                onClose={() => setConfirmOpen(false)}
-                onConfirm={handleDelete}
-                title="Confirmar Exclusão de Acesso"
-                message={`Tem certeza que deseja remover o acesso do usuário "${itemToDelete?.username}" a esta tela?`}
-            />
+            <ConfirmationDialog open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={handleDelete} title="Confirmar Exclusão de Acesso" message={`Tem certeza que deseja remover o acesso do usuário "${itemToDelete?.username}" a esta tela?`}/>
         </Grid>
     );
 };

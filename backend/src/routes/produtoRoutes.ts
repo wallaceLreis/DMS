@@ -2,7 +2,8 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { protect } from '../middleware/authMiddleware';
-import { getProdutos, createProduto, updateProduto, deleteProduto } from '../controllers/produtoController';
+import { getProdutos, createProduto, getProdutoById, updateProduto, deleteProduto } from '../controllers/produtoController';
+
 
 const router = Router();
 
@@ -21,6 +22,7 @@ router.route('/')
     .post(upload.single('imagem'), createProduto);
 
 router.route('/:id')
+    .get(getProdutoById) // <-- NOVA ROTA GET POR ID
     .put(upload.single('imagem'), updateProduto)
     .delete(deleteProduto);
 

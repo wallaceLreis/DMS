@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../services/api';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef } from '@mui/x-data-grid';
-import { Box, Typography, CircularProgress, IconButton } from '@mui/material';
+import { Box, Typography, CircularProgress, IconButton, TextField, InputAdornment } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SearchIcon from '@mui/icons-material/Search';
+import debounce from 'lodash.debounce';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 
 interface Campo {
@@ -25,8 +27,9 @@ export const GenericScreenPage = () => {
     const [loading, setLoading] = useState(true);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState<any>(null);
+    const [searchText, setSearchText] = useState('');
 
-    const fetchData = async () => {
+    const fetchData = async (query = '') => {
         if (!tableName) return;
         setLoading(true);
         try {
@@ -36,13 +39,13 @@ export const GenericScreenPage = () => {
             }
             const telaInfo = metaResponse.data[0];
             
-            // A rota genérica de dados pode não existir para telas base, o que é ok
             let dataResponse;
             try {
-                dataResponse = await api.get(`/data/${tableName}`);
+                // Passa o termo de busca para a API de dados genérica
+                dataResponse = await api.get(`/data/${tableName}?q=${query}`);
                 setData(dataResponse.data);
             } catch (dataError) {
-                console.log(`Não há uma rota de dados para /data/${tableName}. Isso pode ser normal para telas como 'Dicionário'.`);
+                console.log(`Não há uma rota de dados para /data/${tableName}.`);
                 setData([]);
             }
 
@@ -56,9 +59,17 @@ export const GenericScreenPage = () => {
         }
     };
 
+    // Usamos o tableName na dependência para recriar a função de debounce se a tela mudar
+    const debouncedFetchData = useMemo(() => debounce(fetchData, 300), [tableName]);
+
     useEffect(() => { 
         fetchData(); 
     }, [tableName]);
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchText(e.target.value);
+        debouncedFetchData(e.target.value);
+    };
 
     const openConfirmDialog = (item: any) => {
         setItemToDelete(item);
@@ -69,7 +80,7 @@ export const GenericScreenPage = () => {
         if (!itemToDelete || !tableName) return;
         try {
             await api.delete(`/data/${tableName}/${itemToDelete.id}`);
-            fetchData();
+            fetchData(searchText); // Atualiza a lista respeitando a busca
         } catch (error) {
             console.error("Erro ao deletar registro:", error);
         } finally {
@@ -105,6 +116,17 @@ export const GenericScreenPage = () => {
     return (
         <Box>
             <Typography variant="h4" gutterBottom>{metadata.titulo_tela}</Typography>
+            
+            <TextField
+                label="Pesquisar..."
+                variant="outlined"
+                fullWidth
+                value={searchText}
+                onChange={handleSearchChange}
+                sx={{ mb: 2 }}
+                InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
+            />
+
             <Box sx={{ height: '70vh', width: '100%' }}>
                 <DataGrid
                     rows={data}
@@ -112,6 +134,7 @@ export const GenericScreenPage = () => {
                     getRowId={(row) => row.id} // Assume que a chave primária de todas as tabelas de dados se chama 'id'
                 />
             </Box>
+
             <ConfirmationDialog
                 open={confirmOpen}
                 onClose={() => setConfirmOpen(false)}

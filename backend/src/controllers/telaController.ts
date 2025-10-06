@@ -3,7 +3,8 @@ import pool from '../config/db';
 import * as telaService from '../services/telaService';
 
 export const getTelas = async (req: Request, res: Response) => {
-  const { nome_tabela } = req.query;
+  const { nome_tabela, q } = req.query;
+  const searchTerm = q ? `%${String(q)}%` : '%';
 
   try {
     if (nome_tabela) {
@@ -13,8 +14,13 @@ export const getTelas = async (req: Request, res: Response) => {
       }
       return res.status(200).json([tela]);
     } else {
-      const telas = await telaService.findAllTelas();
-      return res.status(200).json(telas);
+      const query = `
+        SELECT * FROM meta_telas 
+        WHERE titulo_tela ILIKE $1 
+        ORDER BY titulo_tela
+      `;
+      const telas = await pool.query(query, [searchTerm]);
+      return res.status(200).json(telas.rows);
     }
   } catch (error) {
     console.error("Erro em getTelas:", error);

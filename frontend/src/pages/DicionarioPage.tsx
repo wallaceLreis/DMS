@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import api from '../services/api';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid';
-import { Box, Typography, Button, Modal, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, IconButton } from '@mui/material';
+import { Box, Typography, Button, Modal, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, IconButton, InputAdornment } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SearchIcon from '@mui/icons-material/Search';
+import debounce from 'lodash.debounce';
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
 
 const modalStyle = {
@@ -38,17 +40,28 @@ export const DicionarioPage = () => {
     const [editingField, setEditingField] = useState<Partial<Campo> | null>(null);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState<any>(null);
+    const [searchText, setSearchText] = useState('');
 
-    const fetchTelas = async () => {
-        const response = await api.get('/telas');
+    const fetchTelas = async (query = '') => {
+        const response = await api.get(`/telas?q=${query}`);
         setTelas(response.data);
     };
-    useEffect(() => { fetchTelas(); }, []);
+
+    const debouncedFetch = useMemo(() => debounce(fetchTelas, 300), []);
+
+    useEffect(() => {
+        fetchTelas();
+    }, []);
     
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchText(e.target.value);
+        debouncedFetch(e.target.value);
+    };
+
     const refreshSelectedTela = async (telaId: number) => {
         const response = await api.get(`/telas/${telaId}`);
         setSelectedTela(response.data);
-    }
+    };
 
     const handleRowDoubleClick = async (params: GridRowParams) => {
         await refreshSelectedTela(params.id as number);
@@ -79,13 +92,17 @@ export const DicionarioPage = () => {
 
     const handleSaveField = async () => {
         if (!editingField || !selectedTela) return;
-        if (editingField.campo_id) {
-            await api.put(`/telas/${selectedTela.tela_id}/campos/${editingField.campo_id}`, editingField);
-        } else {
-            await api.post(`/telas/${selectedTela.tela_id}/campos`, editingField);
+        try {
+            if (editingField.campo_id) {
+                await api.put(`/telas/${selectedTela.tela_id}/campos/${editingField.campo_id}`, editingField);
+            } else {
+                await api.post(`/telas/${selectedTela.tela_id}/campos`, editingField);
+            }
+            await refreshSelectedTela(selectedTela.tela_id);
+            handleCloseFieldDialog();
+        } catch (error) {
+            console.error("Erro ao salvar campo:", error)
         }
-        await refreshSelectedTela(selectedTela.tela_id);
-        handleCloseFieldDialog();
     };
 
     const openConfirmDialog = (item: any) => {
@@ -96,10 +113,10 @@ export const DicionarioPage = () => {
     const handleDelete = async () => {
         if (!itemToDelete) return;
         try {
-            if (itemToDelete.campo_id) { // Deletando um campo
+            if (itemToDelete.campo_id) {
                 await api.delete(`/telas/${selectedTela?.tela_id}/campos/${itemToDelete.campo_id}`);
                 await refreshSelectedTela(selectedTela!.tela_id);
-            } else { // Deletando uma tela
+            } else {
                 await api.delete(`/telas/${itemToDelete.tela_id}`);
                 fetchTelas();
             }
@@ -136,12 +153,8 @@ export const DicionarioPage = () => {
             field: 'actions', type: 'actions', headerName: 'Ações', width: 120,
             renderCell: (params) => (
                 <>
-                    <IconButton onClick={() => handleOpenFieldDialog(params.row)} disabled={params.row.is_nativo}>
-                        <EditIcon />
-                    </IconButton>
-                    <IconButton onClick={() => openConfirmDialog(params.row)} disabled={params.row.is_nativo}>
-                        <DeleteIcon />
-                    </IconButton>
+                    <IconButton onClick={() => handleOpenFieldDialog(params.row)} disabled={params.row.is_nativo}><EditIcon /></IconButton>
+                    <IconButton onClick={() => openConfirmDialog(params.row)} disabled={params.row.is_nativo}><DeleteIcon /></IconButton>
                 </>
             )
         }
@@ -153,9 +166,21 @@ export const DicionarioPage = () => {
                 <Typography variant="h4">Dicionário de Dados</Typography>
                 <Button variant="contained" startIcon={<AddIcon />}>Nova Tela</Button>
             </Box>
+
+            <TextField
+                label="Pesquisar por Título da Tela"
+                variant="outlined"
+                fullWidth
+                value={searchText}
+                onChange={handleSearchChange}
+                sx={{ mb: 2 }}
+                InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
+            />
+            
             <Box sx={{ height: '70vh', width: '100%' }}>
                 <DataGrid rows={telas} columns={columns} getRowId={(row) => row.tela_id} onRowDoubleClick={handleRowDoubleClick} />
             </Box>
+            
             <Modal open={isDetailModalOpen} onClose={handleCloseDetailModal}>
                 <Box sx={modalStyle}>
                     {selectedTela && (
@@ -180,6 +205,7 @@ export const DicionarioPage = () => {
                     )}
                 </Box>
             </Modal>
+
             <Dialog open={isFieldDialogOpen} onClose={handleCloseFieldDialog}>
                 <DialogTitle>{editingField?.campo_id ? 'Editar Campo' : 'Novo Campo'}</DialogTitle>
                 <DialogContent>
@@ -187,7 +213,7 @@ export const DicionarioPage = () => {
                     <TextField margin="dense" label="Título do Campo" fullWidth defaultValue={editingField?.titulo_campo || ''} onChange={(e) => setEditingField({...editingField, titulo_campo: e.target.value})}/>
                     <FormControl fullWidth margin="dense">
                         <InputLabel>Tipo de Dado</InputLabel>
-                        <Select label="Tipo de Dado" value={editingField?.tipo_dado || 'TEXT'} onChange={(e) => setEditingField({...editingField, tipo_dado: e.target.value})}>
+                        <Select label="Tipo de Dado" value={editingField?.tipo_dado || 'TEXT'} onChange={(e) => setEditingField({...editingField, tipo_dado: e.target.value as string})}>
                             <MenuItem value="TEXT">Texto</MenuItem>
                             <MenuItem value="INTEGER">Inteiro</MenuItem>
                             <MenuItem value="DECIMAL">Decimal</MenuItem>
@@ -200,12 +226,13 @@ export const DicionarioPage = () => {
                     <Button onClick={handleSaveField} variant="contained">Salvar</Button>
                 </DialogActions>
             </Dialog>
+
             <ConfirmationDialog
                 open={confirmOpen}
                 onClose={() => setConfirmOpen(false)}
                 onConfirm={handleDelete}
                 title="Confirmar Exclusão"
-                message={`Tem certeza que deseja excluir "${itemToDelete?.titulo_tela || itemToDelete?.titulo_campo}"? Esta ação não pode ser desfeita.`}
+                message={`Tem certeza que deseja excluir "${itemToDelete?.titulo_tela || itemToDelete?.titulo_campo}"?`}
             />
         </Box>
     );
