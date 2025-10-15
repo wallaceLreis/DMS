@@ -5,8 +5,8 @@ import api from '../services/api';
 import { Button, TextField, Container, Typography, Box, Alert } from '@mui/material';
 
 export const LoginPage = () => {
-  const [username, setUsername] = useState('sup');
-  const [password, setPassword] = useState('admin');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -42,6 +42,7 @@ export const LoginPage = () => {
             autoFocus
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            inputProps={{ autoComplete: 'off' }}
           />
           <TextField
             margin="normal"
@@ -53,6 +54,7 @@ export const LoginPage = () => {
             id="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            inputProps={{ autoComplete: 'off' }}
           />
           {error && <Alert severity="error" sx={{ width: '100%', mt: 2 }}>{error}</Alert>}
           <Button type="submit" fullWidth variant="contained" sx={{ mt: 3, mb: 2 }}>

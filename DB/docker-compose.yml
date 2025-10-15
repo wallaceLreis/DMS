@@ -1,25 +1,17 @@
 services:
-  # serviço de banco de dados PostgreSQL
   db:
-    image: postgres:15-alpine  
-    container_name: dms_database
+    image: bitnami/postgresql:latest
+    container_name: dms_database_bitnami
     restart: always
-    
-    # Variáveis de ambiente para criar o banco e o usuário do DB
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER} 
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} 
-      
-    # Mapeia a porta do contêiner para a sua máquina local
+      POSTGRESQL_USERNAME: ${POSTGRES_USER}
+      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRESQL_DATABASE: ${POSTGRES_DB}
     ports:
       - "5432:5432"
-      
-    # Garante que os dados não sejam perdidos ao reiniciar/remover o contêiner
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_bitnami:/bitnami/postgresql
       - ./init_database.sql:/docker-entrypoint-initdb.d/init_database.sql
 
-# Define o volume nomeado para persistir os dados
 volumes:
-  postgres_data:
+  postgres_data_bitnami:
