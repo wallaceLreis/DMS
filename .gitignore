@@ -41,3 +41,4 @@ Thumbs.db
 backend/public/uploads/
 
 .env
+*.env
