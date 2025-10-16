@@ -1,20 +1,16 @@
+// backend/src/middleware/authMiddleware.ts
+
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import pool from '../config/db';
 
+// Interface para estender o objeto Request do Express
 interface AuthRequest extends Request {
-  user?: { id: number; username: string; role: string };
-}
-
-const getScreenNameFromUrl = (url: string): string | null => {
-    const parts = url.split('/');
-    if (parts[2] === 'data' && parts[3]) {
-        return parts[3].split('?')[0];
-    }
-    if(parts[2]){
-        return parts[2].split('?')[0];
-    }
-    return null;
+  user?: {
+    id: number;
+    username: string;
+    role: string;
+  };
 }
 
 export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -22,59 +18,35 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
 
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     try {
+      // 1. Extrai o token do cabeçalho
       token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: number; username: string; role: string };
-      req.user = decoded;
 
-      // Regra 1: Se o usuário for 'sup', ele tem acesso total e imediato.
-      if (req.user.role === 'sup') {
-          return next();
+      // 2. Verifica se o token é válido
+      const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: number };
+
+      // 3. Busca o usuário no banco de dados e anexa à requisição
+      const result = await pool.query(
+        'SELECT usuario_id, username, role FROM dms_usuarios WHERE usuario_id = $1',
+        [decoded.id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(401).json({ message: 'Não autorizado, usuário não encontrado.' });
       }
 
-      const screenName = getScreenNameFromUrl(req.originalUrl);
+      // Anexa o objeto do usuário (sem o hash da senha) à requisição
+      const user = result.rows[0];
+      req.user = {
+        id: user.usuario_id,
+        username: user.username,
+        role: user.role,
+      };
 
-      // --- LÓGICA CORRIGIDA ---
-      const isBaseScreen = screenName && ['usuarios', 'acessos', 'telas'].includes(screenName);
-      
-      if (isBaseScreen) {
-          // Regra 2: Se for uma tela base, permite apenas a LEITURA (GET) para usuários comuns.
-          if (req.method === 'GET') {
-              return next();
-          } else {
-              // Bloqueia POST, PUT, DELETE etc. para usuários comuns em telas base.
-              return res.status(403).json({ message: 'Acesso negado. Apenas superusuários podem modificar recursos do sistema.' });
-          }
-      }
-      // --- FIM DA LÓGICA CORRIGIDA ---
-
-      // Se não for uma tela base (ex: 'clientes'), verifica a tabela dms_acessos.
-      if (screenName) {
-        const permCheck = await pool.query(
-            `SELECT a.* FROM dms_acessos a
-             JOIN meta_telas t ON a.tela_id = t.tela_id
-             WHERE a.usuario_id = $1 AND t.nome_tabela = $2`,
-            [req.user.id, screenName]
-        );
-
-        if (permCheck.rowCount === 0) {
-            return res.status(403).json({ message: 'Acesso negado.' });
-        }
-
-        const permissoes = permCheck.rows[0];
-
-        if (req.method === 'DELETE' && !permissoes.pode_excluir) {
-             return res.status(403).json({ message: 'Permissão para excluir negada.' });
-        }
-        if (req.method === 'PUT' && !permissoes.pode_alterar) {
-             return res.status(403).json({ message: 'Permissão para alterar negada.' });
-        }
-        if (req.method === 'POST' && !permissoes.pode_incluir) {
-             return res.status(403).json({ message: 'Permissão para incluir negada.' });
-        }
-      }
-      
+      // 4. Passa para o próximo middleware (ou para o controller da rota)
       next();
+
     } catch (error) {
+      console.error('Erro na autenticação do token:', error);
       return res.status(401).json({ message: 'Não autorizado, token inválido.' });
     }
   }
