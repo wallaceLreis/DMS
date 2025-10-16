@@ -1,3 +1,5 @@
+// frontend/src/components/CotacaoDialog.tsx
+
 import { useState, useEffect } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box,
@@ -9,6 +11,15 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import api from '../services/api';
 import axios from 'axios';
 import type { Produto, Empresa } from '../types';
+
+// --- FUNÇÃO DE MÁSCARA ---
+const formatCEP = (value: string) => {
+    if (!value) return '';
+    const cep = value.replace(/\D/g, ''); // Remove tudo que não é dígito
+    return cep
+        .replace(/^(\d{5})(\d)/, '$1-$2')
+        .substring(0, 9); // Limita o tamanho final
+};
 
 interface CotacaoDialogProps {
     open: boolean;
@@ -44,6 +55,8 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         if (open) {
             api.get('/empresas').then(res => setEmpresas(res.data));
             api.get('/produtos').then(res => setProdutos(res.data));
+            
+            // Reseta o estado do diálogo
             setItens([]);
             setSelectedEmpresa(null);
             setCepDestino('');
@@ -81,14 +94,13 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         }
         const data = {
             empresa_origem_id: selectedEmpresa.empresa_id,
-            cep_destino: cepDestino,
+            cep_destino: cepDestino, // O estado já contém apenas os dígitos
             destinatario: destinatario,
             itens: itens.map(({ produto_id, quantidade }) => ({ produto_id, quantidade }))
         };
         onSave(data);
     };
 
-    // Busca o endereço pelo CEP
     const handleCepBlur = async () => {
         const cep = cepDestino.replace(/\D/g, '');
         if (cep.length !== 8) {
@@ -117,7 +129,6 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
             <DialogTitle>Nova Cotação de Frete</DialogTitle>
             <DialogContent>
-                {/* Dados do envio */}
                 <Box sx={{ p: 2 }}>
                     <Typography variant="h6">1. Dados do Envio</Typography>
                     <Autocomplete
@@ -138,17 +149,16 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                     />
                     <TextField
                         label="CEP de Destino *"
-                        value={cepDestino}
-                        onChange={(e) => setCepDestino(e.target.value)}
+                        value={formatCEP(cepDestino)} // <-- MÁSCARA APLICADA
+                        onChange={(e) => setCepDestino(e.target.value.replace(/\D/g, ''))} // <-- SALVA APENAS DÍGITOS
                         onBlur={handleCepBlur}
                         fullWidth
                         margin="normal"
+                        inputProps={{ maxLength: 9 }} // Limita o input
                         InputProps={{
                             endAdornment: cepLoading && <CircularProgress size={20} />
                         }}
                     />
-
-                    {/* Campos de endereço sempre visíveis */}
                     <Box
                         sx={{
                             display: 'flex',
@@ -190,8 +200,6 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                         />
                     </Box>
                 </Box>
-
-                {/* Itens da cotação */}
                 <Box sx={{ p: 2 }}>
                     <Typography variant="h6">2. Itens da Cotação</Typography>
                     <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
@@ -236,7 +244,6 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                     </List>
                 </Box>
             </DialogContent>
-
             <DialogActions>
                 <Button onClick={onClose}>Cancelar</Button>
                 <Button onClick={handleSave} variant="contained">
