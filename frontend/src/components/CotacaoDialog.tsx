@@ -54,7 +54,8 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
     const [cepLoading, setCepLoading] = useState(false);
     
     const [codigo, setCodigo] = useState('');
-    const [currentStock, setCurrentStock] = useState<number | null>(null);
+    // ATUALIZADO: Renomeado para 'availableStock' para clareza
+    const [availableStock, setAvailableStock] = useState<number | null>(null);
     const [stockLoading, setStockLoading] = useState(false);
 
     useEffect(() => {
@@ -62,7 +63,6 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
             api.get('/empresas').then(res => setEmpresas(res.data));
             api.get('/produtos').then(res => setProdutos(res.data));
             
-            // Reseta o estado do diálogo
             setItens([]);
             setSelectedEmpresa(null);
             setCepDestino('');
@@ -70,31 +70,31 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
             setSelectedProduto(null);
             setQuantidade(1);
             setEnderecoDestino(null);
-            setCurrentStock(null);
+            setAvailableStock(null);
             setStockLoading(false);
             setCodigo('');
         }
     }, [open]);
 
+    // ATUALIZADO: Lê 'estoque_disponivel' da API
     const handleProdutoChange = async (val: Produto | null) => {
         setSelectedProduto(val);
-        setCurrentStock(null);
+        setAvailableStock(null);
         setCodigo(val?.codigo ? String(val.codigo) : '');
 
         if (val && val.produto_id) {
             setStockLoading(true);
             try {
+                // A API agora retorna { ..., estoque_disponivel: X }
                 const res = await api.get(`/estoque?produto_id=${val.produto_id}`);
-                let stock = 0;
-                if (Array.isArray(res.data) && res.data.length > 0) {
-                    stock = res.data[0].estoque_atual ?? 0;
-                } else if (res.data.estoque_atual) {
-                    stock = res.data.estoque_atual ?? 0;
-                }
-                setCurrentStock(stock);
+                
+                // Lê o campo correto da resposta
+                const stock = res.data.estoque_disponivel ?? 0;
+                setAvailableStock(stock);
+
             } catch (error) {
                 console.error("Erro ao buscar estoque:", error);
-                setCurrentStock(0);
+                setAvailableStock(0);
             } finally {
                 setStockLoading(false);
             }
@@ -113,6 +113,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         }
     };
 
+    // ATUALIZADO: Valida contra 'availableStock'
     const handleAddItem = () => {
         if (!selectedProduto || !selectedProduto.produto_id || quantidade <= 0) return;
 
@@ -120,8 +121,9 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
             alert("Aguarde, verificando estoque disponível...");
             return;
         }
-        if (currentStock === null || quantidade > currentStock) {
-            alert(`Quantidade excede o estoque. Disponível: ${currentStock ?? 0}`);
+        
+        if (availableStock === null || quantidade > availableStock) {
+            alert(`Quantidade excede o estoque disponível. Disponível: ${availableStock ?? 0}`);
             return;
         }
 
@@ -137,7 +139,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         setItens([...itens, newItem]);
         setSelectedProduto(null);
         setQuantidade(1);
-        setCurrentStock(null);
+        setAvailableStock(null);
         setCodigo('');
     };
 
@@ -236,11 +238,10 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                     </Box>
                 </Box>
 
-                {/* --- SEÇÃO DE ITENS ATUALIZADA --- */}
+                {/* --- SEÇÃO 2: Itens da Cotação --- */}
                 <Box sx={{ p: 2 }}>
                     <Typography variant="h6">2. Itens da Cotação</Typography>
                     
-                    {/* Linha ÚNICA: Código, Nome, Qtd, Botão */}
                     <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
                         <TextField
                             label="Código *"
@@ -278,26 +279,25 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                         <Button 
                             onClick={handleAddItem} 
                             variant="outlined" 
-                            sx={{ minWidth: 56, height: 56 /* Alinha altura com TextFields */ }}
+                            sx={{ minWidth: 56, height: 56 }}
                         >
                             <AddIcon />
                         </Button>
                     </Box>
 
-                    {/* Linha 2: Estoque (agora abaixo, centralizado) */}
-                    <Box sx={{ mb: 2, minHeight: '20px', /* Evita pulo de layout */ textAlign: 'center' }}>
+                    {/* ATUALIZADO: Exibe 'Estoque Disponível' */}
+                    <Box sx={{ mb: 2, minHeight: '20px', textAlign: 'center' }}>
                         {stockLoading ? (
                             <CircularProgress size={24} />
                         ) : (
-                            currentStock !== null && (
+                            availableStock !== null && (
                                 <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
-                                    Estoque Disponível: {currentStock}
+                                    Estoque Disponível: {availableStock}
                                 </Typography>
                             )
                         )}
                     </Box>
                     
-                    {/* Lista de Itens Adicionados */}
                     <List dense>
                         {itens.map(item => (
                             <ListItem key={item.produto_id}>

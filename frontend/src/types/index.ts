@@ -1,3 +1,5 @@
+// frontend/src/types/index.ts
+
 export interface Unidade {
     unidade_id?: number;
     id?: number;
@@ -24,18 +26,20 @@ export interface Produto {
     [key: string]: any;
 }
 
-// NOVA INTERFACE ADICIONADA
+// --- INTERFACE CORRIGIDA E ATUALIZADA ---
 export interface Empresa {
     empresa_id?: number;
     nome_fantasia: string;
     razao_social: string;
     cnpj: string;
     email?: string;
+    telefone?: string;      // <<< CAMPO ADICIONADO
     cep?: string;
-    logradouro?: string;
+    logouro?: string;       // <<< CAMPO CORRIGIDO (estava logradouro)
     numero?: string;
     complemento?: string;
     bairro?: string;
     cidade?: string;
     uf?: string;
+    ativo?: boolean;
 }
