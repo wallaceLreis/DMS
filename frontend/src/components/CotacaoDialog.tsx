@@ -21,6 +21,7 @@ const formatCEP = (value: string) => {
         .substring(0, 9); // Limita o tamanho final
 };
 
+
 interface CotacaoDialogProps {
     open: boolean;
     onClose: () => void;
@@ -51,6 +52,10 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
     const [enderecoDestino, setEnderecoDestino] = useState<Endereco | null>(null);
     const [cepLoading, setCepLoading] = useState(false);
 
+    // <-- NOVO: Estados para controlar o estoque do item selecionado -->
+    const [currentStock, setCurrentStock] = useState<number | null>(null);
+    const [stockLoading, setStockLoading] = useState(false);
+
     useEffect(() => {
         if (open) {
             api.get('/empresas').then(res => setEmpresas(res.data));
@@ -64,11 +69,57 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
             setSelectedProduto(null);
             setQuantidade(1);
             setEnderecoDestino(null);
+            setCurrentStock(null); // <-- NOVO: Reseta estoque
+            setStockLoading(false); // <-- NOVO: Reseta loading
         }
     }, [open]);
 
+    // <-- NOVO: Função para buscar estoque ao selecionar produto -->
+    const handleProdutoChange = async (val: Produto | null) => {
+        setSelectedProduto(val);
+        setCurrentStock(null); // Reseta o estoque ao mudar o produto
+
+        if (val && val.produto_id) {
+            setStockLoading(true);
+            try {
+                //  aponta para getEstoqueAtual na rota /estoque
+                // Assumindo que a API aceita filtro por query param
+                const res = await api.get(`/estoque?produto_id=${val.produto_id}`);
+                
+                let stock = 0; // Padrão é 0 se não encontrar
+                
+                // A API pode retornar um array filtrado ou um objeto único
+                if (Array.isArray(res.data) && res.data.length > 0) {
+                    stock = res.data[0].estoque_atual ?? 0;
+                } else if (res.data.estoque_atual) {
+                    stock = res.data.estoque_atual ?? 0;
+                }
+                
+                setCurrentStock(stock);
+
+            } catch (error) {
+                console.error("Erro ao buscar estoque:", error);
+                setCurrentStock(0); // Assume 0 em caso de erro
+            } finally {
+                setStockLoading(false);
+            }
+        }
+    };
+
     const handleAddItem = () => {
         if (!selectedProduto || !selectedProduto.produto_id || quantidade <= 0) return;
+
+        // <-- NOVO: Bloco de validação de estoque -->
+        if (stockLoading) {
+            alert("Aguarde, verificando estoque disponível...");
+            return;
+        }
+        if (currentStock === null || quantidade > currentStock) {
+            alert(`Quantidade excede o estoque. Disponível: ${currentStock ?? 0}`);
+            return;
+        }
+        // <-- Fim do bloco -->
+
         if (itens.some(item => item.produto_id === selectedProduto.produto_id)) {
             alert("Este produto já foi adicionado à cotação.");
             return;
@@ -81,6 +132,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         setItens([...itens, newItem]);
         setSelectedProduto(null);
         setQuantidade(1);
+        setCurrentStock(null); // Reseta o estoque após adicionar
     };
 
     const handleRemoveItem = (produto_id: number) => {
@@ -94,7 +146,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         }
         const data = {
             empresa_origem_id: selectedEmpresa.empresa_id,
-            cep_destino: cepDestino, // O estado já contém apenas os dígitos
+            cep_destino: cepDestino.replace(/\D/g, ''), // Garante envio só de dígitos
             destinatario: destinatario,
             itens: itens.map(({ produto_id, quantidade }) => ({ produto_id, quantidade }))
         };
@@ -149,12 +201,12 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                     />
                     <TextField
                         label="CEP de Destino *"
-                        value={formatCEP(cepDestino)} // <-- MÁSCARA APLICADA
-                        onChange={(e) => setCepDestino(e.target.value.replace(/\D/g, ''))} // <-- SALVA APENAS DÍGITOS
+                        value={formatCEP(cepDestino)}
+                        onChange={(e) => setCepDestino(e.target.value.replace(/\D/g, ''))}
                         onBlur={handleCepBlur}
                         fullWidth
                         margin="normal"
-                        inputProps={{ maxLength: 9 }} // Limita o input
+                        inputProps={{ maxLength: 9 }}
                         InputProps={{
                             endAdornment: cepLoading && <CircularProgress size={20} />
                         }}
@@ -207,12 +259,24 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                             options={produtos}
                             getOptionLabel={(opt) => opt.nome || ''}
                             value={selectedProduto}
-                            onChange={(_e, val) => setSelectedProduto(val)}
+                            onChange={(_e, val) => handleProdutoChange(val)} // <-- NOVO: Chama a função de busca de estoque
                             fullWidth
                             renderInput={(params) => (
                                 <TextField {...params} label="Adicionar Produto" />
                             )}
                         />
+                        {/* NOVO: Box para exibir estoque ou loading */}
+                        <Box sx={{ width: 100, textAlign: 'center', alignSelf: 'center', minHeight: '36px' }}>
+                            {stockLoading ? (
+                                <CircularProgress size={24} />
+                            ) : (
+                                currentStock !== null && (
+                                    <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
+                                        Estoque: {currentStock}
+                                    </Typography>
+                                )
+                            )}
+                        </Box>
                         <TextField
                             label="Qtd."
                             type="number"
