@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box,
     Autocomplete, IconButton, List, ListItem, ListItemText, ListItemSecondaryAction,
-    Typography, CircularProgress
+    Typography, CircularProgress, InputAdornment
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SearchIcon from '@mui/icons-material/Search';
 import api from '../services/api';
 import axios from 'axios';
 import type { Produto, Empresa } from '../types';
@@ -15,10 +16,10 @@ import type { Produto, Empresa } from '../types';
 // --- FUNÇÃO DE MÁSCARA ---
 const formatCEP = (value: string) => {
     if (!value) return '';
-    const cep = value.replace(/\D/g, ''); // Remove tudo que não é dígito
+    const cep = value.replace(/\D/g, '');
     return cep
         .replace(/^(\d{5})(\d)/, '$1-$2')
-        .substring(0, 9); // Limita o tamanho final
+        .substring(0, 9);
 };
 
 
@@ -51,8 +52,8 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
     const [quantidade, setQuantidade] = useState(1);
     const [enderecoDestino, setEnderecoDestino] = useState<Endereco | null>(null);
     const [cepLoading, setCepLoading] = useState(false);
-
-    // <-- NOVO: Estados para controlar o estoque do item selecionado -->
+    
+    const [codigo, setCodigo] = useState('');
     const [currentStock, setCurrentStock] = useState<number | null>(null);
     const [stockLoading, setStockLoading] = useState(false);
 
@@ -69,47 +70,52 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
             setSelectedProduto(null);
             setQuantidade(1);
             setEnderecoDestino(null);
-            setCurrentStock(null); // <-- NOVO: Reseta estoque
-            setStockLoading(false); // <-- NOVO: Reseta loading
+            setCurrentStock(null);
+            setStockLoading(false);
+            setCodigo('');
         }
     }, [open]);
 
-    // <-- NOVO: Função para buscar estoque ao selecionar produto -->
     const handleProdutoChange = async (val: Produto | null) => {
         setSelectedProduto(val);
-        setCurrentStock(null); // Reseta o estoque ao mudar o produto
+        setCurrentStock(null);
+        setCodigo(val?.codigo ? String(val.codigo) : '');
 
         if (val && val.produto_id) {
             setStockLoading(true);
             try {
-                //  aponta para getEstoqueAtual na rota /estoque
-                // Assumindo que a API aceita filtro por query param
                 const res = await api.get(`/estoque?produto_id=${val.produto_id}`);
-                
-                let stock = 0; // Padrão é 0 se não encontrar
-                
-                // A API pode retornar um array filtrado ou um objeto único
+                let stock = 0;
                 if (Array.isArray(res.data) && res.data.length > 0) {
                     stock = res.data[0].estoque_atual ?? 0;
                 } else if (res.data.estoque_atual) {
                     stock = res.data.estoque_atual ?? 0;
                 }
-                
                 setCurrentStock(stock);
-
             } catch (error) {
                 console.error("Erro ao buscar estoque:", error);
-                setCurrentStock(0); // Assume 0 em caso de erro
+                setCurrentStock(0);
             } finally {
                 setStockLoading(false);
             }
         }
     };
 
+    const handleCodigoSearch = () => {
+        if (!codigo) return;
+        const foundProduct = produtos.find(p => String(p.codigo) === codigo);
+        
+        if (foundProduct) {
+            handleProdutoChange(foundProduct);
+        } else {
+            alert("Produto com este código não encontrado.");
+            handleProdutoChange(null);
+        }
+    };
+
     const handleAddItem = () => {
         if (!selectedProduto || !selectedProduto.produto_id || quantidade <= 0) return;
 
-        // <-- NOVO: Bloco de validação de estoque -->
         if (stockLoading) {
             alert("Aguarde, verificando estoque disponível...");
             return;
@@ -118,7 +124,6 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
             alert(`Quantidade excede o estoque. Disponível: ${currentStock ?? 0}`);
             return;
         }
-        // <-- Fim do bloco -->
 
         if (itens.some(item => item.produto_id === selectedProduto.produto_id)) {
             alert("Este produto já foi adicionado à cotação.");
@@ -132,7 +137,8 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         setItens([...itens, newItem]);
         setSelectedProduto(null);
         setQuantidade(1);
-        setCurrentStock(null); // Reseta o estoque após adicionar
+        setCurrentStock(null);
+        setCodigo('');
     };
 
     const handleRemoveItem = (produto_id: number) => {
@@ -146,7 +152,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         }
         const data = {
             empresa_origem_id: selectedEmpresa.empresa_id,
-            cep_destino: cepDestino.replace(/\D/g, ''), // Garante envio só de dígitos
+            cep_destino: cepDestino.replace(/\D/g, ''),
             destinatario: destinatario,
             itens: itens.map(({ produto_id, quantidade }) => ({ produto_id, quantidade }))
         };
@@ -181,6 +187,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
             <DialogTitle>Nova Cotação de Frete</DialogTitle>
             <DialogContent>
+                {/* --- Seção 1: Dados do Envio --- */}
                 <Box sx={{ p: 2 }}>
                     <Typography variant="h6">1. Dados do Envio</Typography>
                     <Autocomplete
@@ -222,61 +229,45 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                             mt: 1
                         }}
                     >
-                        <TextField
-                            label="Rua"
-                            value={enderecoDestino?.logradouro || ''}
-                            InputProps={{ readOnly: true }}
-                            variant="standard"
-                            sx={{ flex: '1 1 60%' }}
-                        />
-                        <TextField
-                            label="Bairro"
-                            value={enderecoDestino?.bairro || ''}
-                            InputProps={{ readOnly: true }}
-                            variant="standard"
-                            sx={{ flex: '1 1 35%' }}
-                        />
-                        <TextField
-                            label="Cidade"
-                            value={enderecoDestino?.localidade || ''}
-                            InputProps={{ readOnly: true }}
-                            variant="standard"
-                            sx={{ flex: '1 1 60%' }}
-                        />
-                        <TextField
-                            label="UF"
-                            value={enderecoDestino?.uf || ''}
-                            InputProps={{ readOnly: true }}
-                            variant="standard"
-                            sx={{ flex: '1 1 35%' }}
-                        />
+                        <TextField label="Rua" value={enderecoDestino?.logradouro || ''} InputProps={{ readOnly: true }} variant="standard" sx={{ flex: '1 1 60%' }} />
+                        <TextField label="Bairro" value={enderecoDestino?.bairro || ''} InputProps={{ readOnly: true }} variant="standard" sx={{ flex: '1 1 35%' }} />
+                        <TextField label="Cidade" value={enderecoDestino?.localidade || ''} InputProps={{ readOnly: true }} variant="standard" sx={{ flex: '1 1 60%' }} />
+                        <TextField label="UF" value={enderecoDestino?.uf || ''} InputProps={{ readOnly: true }} variant="standard" sx={{ flex: '1 1 35%' }} />
                     </Box>
                 </Box>
+
+                {/* --- SEÇÃO DE ITENS ATUALIZADA --- */}
                 <Box sx={{ p: 2 }}>
                     <Typography variant="h6">2. Itens da Cotação</Typography>
+                    
+                    {/* Linha ÚNICA: Código, Nome, Qtd, Botão */}
                     <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+                        <TextField
+                            label="Código *"
+                            value={codigo}
+                            onChange={(e) => setCodigo(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleCodigoSearch(); }}
+                            sx={{ width: 150 }}
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <IconButton onClick={handleCodigoSearch} edge="end">
+                                            <SearchIcon />
+                                        </IconButton>
+                                    </InputAdornment>
+                                )
+                            }}
+                        />
                         <Autocomplete
                             options={produtos}
                             getOptionLabel={(opt) => opt.nome || ''}
                             value={selectedProduto}
-                            onChange={(_e, val) => handleProdutoChange(val)} // <-- NOVO: Chama a função de busca de estoque
+                            onChange={(_e, val) => handleProdutoChange(val)}
                             fullWidth
                             renderInput={(params) => (
-                                <TextField {...params} label="Adicionar Produto" />
+                                <TextField {...params} label="Nome do Produto *" />
                             )}
                         />
-                        {/* NOVO: Box para exibir estoque ou loading */}
-                        <Box sx={{ width: 100, textAlign: 'center', alignSelf: 'center', minHeight: '36px' }}>
-                            {stockLoading ? (
-                                <CircularProgress size={24} />
-                            ) : (
-                                currentStock !== null && (
-                                    <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
-                                        Estoque: {currentStock}
-                                    </Typography>
-                                )
-                            )}
-                        </Box>
                         <TextField
                             label="Qtd."
                             type="number"
@@ -284,10 +275,29 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                             onChange={(e) => setQuantidade(Number(e.target.value))}
                             sx={{ width: 100 }}
                         />
-                        <Button onClick={handleAddItem} variant="outlined">
+                        <Button 
+                            onClick={handleAddItem} 
+                            variant="outlined" 
+                            sx={{ minWidth: 56, height: 56 /* Alinha altura com TextFields */ }}
+                        >
                             <AddIcon />
                         </Button>
                     </Box>
+
+                    {/* Linha 2: Estoque (agora abaixo, centralizado) */}
+                    <Box sx={{ mb: 2, minHeight: '20px', /* Evita pulo de layout */ textAlign: 'center' }}>
+                        {stockLoading ? (
+                            <CircularProgress size={24} />
+                        ) : (
+                            currentStock !== null && (
+                                <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
+                                    Estoque Disponível: {currentStock}
+                                </Typography>
+                            )
+                        )}
+                    </Box>
+                    
+                    {/* Lista de Itens Adicionados */}
                     <List dense>
                         {itens.map(item => (
                             <ListItem key={item.produto_id}>
