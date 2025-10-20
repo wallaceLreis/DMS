@@ -14,6 +14,7 @@ import produtoRoutes from './routes/produtoRoutes';
 import estoqueRoutes from './routes/estoqueRoutes';
 import freteRoutes from './routes/freteRoutes';
 import empresaRoutes from './routes/empresaRoutes';
+import lookupRoutes from './routes/lookupRoutes'; // <-- ROTA ADICIONADA
 
 // Configuração inicial
 dotenv.config();
@@ -39,6 +40,7 @@ app.use('/api/produtos', produtoRoutes);
 app.use('/api/estoque', estoqueRoutes);
 app.use('/api/frete', freteRoutes);
 app.use('/api/empresas', empresaRoutes);
+app.use('/api/lookup', lookupRoutes); // <-- ROTA ADICIONADA
 
 // Inicia o servidor
 app.listen(port, () => {

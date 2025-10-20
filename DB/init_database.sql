@@ -7,10 +7,10 @@ CREATE DATABASE DMSPROD;
 \c DMSPROD;
 
 -- =================================================
--- Tabelas EXATAS do seu dump com REGRAS DE EXCLUSÃO
+-- Tabelas
 -- =================================================
 
--- dms_usuarios (PROIBIDO excluir se tiver registros filhos)
+-- dms_usuarios
 CREATE TABLE dms_usuarios (
     usuario_id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE dms_usuarios (
     is_nativo BOOLEAN DEFAULT false NOT NULL
 );
 
--- meta_telas (PROIBIDO excluir se tiver registros filhos)
+-- meta_telas
 CREATE TABLE meta_telas (
     tela_id SERIAL PRIMARY KEY,
     nome_tabela VARCHAR(100) UNIQUE NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE meta_telas (
     is_nativo BOOLEAN DEFAULT false NOT NULL
 );
 
--- meta_campos (exclui em CASCATA se a tela for excluída)
+-- meta_campos
 CREATE TABLE meta_campos (
     campo_id SERIAL PRIMARY KEY,
     tela_id INTEGER NOT NULL REFERENCES meta_telas(tela_id) ON DELETE CASCADE,
@@ -45,7 +45,7 @@ CREATE TABLE meta_campos (
     UNIQUE(tela_id, nome_coluna)
 );
 
--- dms_acessos (exclui em CASCATA se usuário ou tela for excluída)
+-- dms_acessos
 CREATE TABLE dms_acessos (
     acesso_id SERIAL PRIMARY KEY,
     usuario_id INTEGER NOT NULL REFERENCES dms_usuarios(usuario_id) ON DELETE CASCADE,
@@ -57,24 +57,26 @@ CREATE TABLE dms_acessos (
     UNIQUE(usuario_id, tela_id)
 );
 
--- empresas (PROIBIDO excluir se tiver registros filhos)
+-- empresas
 CREATE TABLE empresas (
     empresa_id SERIAL PRIMARY KEY,
     nome_fantasia VARCHAR(255) NOT NULL,
     razao_social VARCHAR(255) NOT NULL,
     cnpj VARCHAR(18) UNIQUE NOT NULL,
     email VARCHAR(255),
+    telefone VARCHAR(20), -- <<< NOVA COLUNA
     cep VARCHAR(9),
-    logradouro VARCHAR(255),
+    logouro VARCHAR(255),
     numero VARCHAR(20),
     complemento VARCHAR(100),
     bairro VARCHAR(100),
     cidade VARCHAR(100),
     uf CHAR(2),
-    data_criacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    data_criacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    ativo BOOLEAN DEFAULT true
 );
 
--- produtos (PROIBIDO excluir se tiver registros filhos)
+-- produtos
 CREATE TABLE produtos (
     produto_id SERIAL PRIMARY KEY,
     codigo BIGINT UNIQUE NOT NULL,
@@ -85,10 +87,12 @@ CREATE TABLE produtos (
     largura NUMERIC(10,2) NOT NULL,
     profundidade NUMERIC(10,2) NOT NULL,
     peso NUMERIC(10,3) NOT NULL,
+    estoque_total NUMERIC(10,3) NOT NULL DEFAULT 0,
+    estoque_provisionado NUMERIC(10,3) NOT NULL DEFAULT 0,
     data_criacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- estoque_movimentos (PROIBIDO excluir produto ou usuário referenciado)
+-- estoque_movimentos
 CREATE TABLE estoque_movimentos (
     movimento_id SERIAL PRIMARY KEY,
     produto_id INTEGER NOT NULL REFERENCES produtos(produto_id) ON DELETE RESTRICT,
@@ -100,7 +104,7 @@ CREATE TABLE estoque_movimentos (
     numero_nota VARCHAR(50)
 );
 
--- meta_relacionamentos (PROIBIDO excluir telas referenciadas)
+-- meta_relacionamentos
 CREATE TABLE meta_relacionamentos (
     rel_id SERIAL PRIMARY KEY,
     tela_pai_id INTEGER NOT NULL REFERENCES meta_telas(tela_id) ON DELETE RESTRICT,
@@ -109,17 +113,17 @@ CREATE TABLE meta_relacionamentos (
     coluna_chave_filho VARCHAR(100) NOT NULL
 );
 
--- cotacoes (PROIBIDO excluir empresa referenciada)
+-- cotacoes
 CREATE TABLE cotacoes (
     cotacao_id SERIAL PRIMARY KEY,
     empresa_origem_id INTEGER NOT NULL REFERENCES empresas(empresa_id) ON DELETE RESTRICT,
     cep_destino VARCHAR(9) NOT NULL,
-    status VARCHAR(20) DEFAULT 'CONCLUIDO' NOT NULL,
+    status VARCHAR(20) DEFAULT 'PROCESSANDO' NOT NULL,
     data_criacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     destinatario VARCHAR(255)
 );
 
--- cotacao_itens (PROIBIDO excluir cotação ou produto referenciado)
+-- cotacao_itens
 CREATE TABLE cotacao_itens (
     item_id SERIAL PRIMARY KEY,
     cotacao_id INTEGER NOT NULL REFERENCES cotacoes(cotacao_id) ON DELETE RESTRICT,
@@ -127,10 +131,11 @@ CREATE TABLE cotacao_itens (
     quantidade INTEGER NOT NULL
 );
 
--- cotacao_resultados (PROIBIDO excluir cotação referenciada)
+-- cotacao_resultados
 CREATE TABLE cotacao_resultados (
     resultado_id SERIAL PRIMARY KEY,
     cotacao_id INTEGER NOT NULL REFERENCES cotacoes(cotacao_id) ON DELETE RESTRICT,
+    service_id INTEGER, -- <<< NOVA COLUNA
     transportadora VARCHAR(100),
     servico VARCHAR(100),
     preco NUMERIC(10,2),
@@ -203,11 +208,11 @@ CREATE INDEX idx_cotacao_itens_cotacao ON cotacao_itens(cotacao_id);
 CREATE INDEX idx_cotacao_itens_produto ON cotacao_itens(produto_id);
 
 -- =================================================
--- Grants
+-- Grants (Assumindo que seu usuário é dms_user)
 -- =================================================
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dms_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dms_user;
-GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO dms_user;
+-- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dms_user;
+-- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dms_user;
+-- GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO dms_user;
 
 -- =================================================
 -- Comentários explicativos sobre as regras

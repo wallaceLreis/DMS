@@ -1,7 +1,8 @@
+// frontend/src/pages/EstoquePage.tsx
+
 import { useEffect, useState, useMemo } from 'react';
 import api from '../services/api';
 import { DataGrid } from '@mui/x-data-grid';
-// CORREÇÃO 1: Separando a importação do componente e dos tipos
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid/models';
 import { 
     Box, Typography, Button, Dialog, DialogTitle, DialogContent, 
@@ -17,11 +18,14 @@ interface Produto {
     nome: string;
 }
 
+// ATUALIZADO: Interface de Estoque com os novos campos
 interface EstoqueItem {
     produto_id: number;
     codigo: number;
     nome: string;
-    quantidade_atual: number;
+    estoque_total: number;
+    estoque_provisionado: number;
+    estoque_disponivel: number;
 }
 
 interface MovimentoState {
@@ -36,12 +40,17 @@ interface MovimentoHistorico {
     numero_nota: string;
     quantidade: number;
     data_movimento: string;
+    tipo_movimento: string; // Adicionado para clareza no histórico
+    username: string; // Adicionado para clareza no histórico
 }
 
+// ATUALIZADO: Interface de Detalhes com os novos campos
 interface DetailData {
     codigo: number;
     nome: string;
-    quantidade_atual: number;
+    estoque_total: number;
+    estoque_provisionado: number;
+    estoque_disponivel: number;
     ultimo_lancamento: string;
     historico: MovimentoHistorico[];
 }
@@ -60,6 +69,7 @@ export const EstoquePage = () => {
     const [isDetailOpen, setDetailOpen] = useState(false);
     const [detailData, setDetailData] = useState<DetailData | null>(null);
 
+    // API agora retorna os 3 campos de estoque
     const fetchEstoque = async (query = '') => {
         try {
             const response = await api.get(`/estoque?q=${query}`);
@@ -100,6 +110,7 @@ export const EstoquePage = () => {
             return;
         }
         try {
+            // A controller do backend (corrigida) agora lida com o req.user.id
             await api.post('/estoque/movimento', movimento);
             fetchEstoque(searchText);
             handleCloseDialog();
@@ -109,10 +120,29 @@ export const EstoquePage = () => {
         }
     };
 
-    const handleRowDoubleClick = async (params: GridRowParams) => {
+    // CORRIGIDO E ATUALIZADO: Busca histórico e usa dados da linha
+    const handleRowDoubleClick = async (params: GridRowParams<EstoqueItem>) => {
         try {
-            const response = await api.get(`/estoque/${params.id}/movimentos`);
-            setDetailData(response.data);
+            // 1. Pega os dados de estoque da linha clicada
+            const stockData = params.row;
+            
+            // 2. Busca o histórico de movimentos
+            const response = await api.get(`/estoque/${stockData.produto_id}/movimentos`);
+            const historico: MovimentoHistorico[] = response.data;
+
+            // 3. Define a data do último lançamento
+            const ultimo_lancamento = historico.length > 0 ? historico[0].data_movimento : '';
+
+            // 4. Combina tudo no estado do diálogo
+            setDetailData({
+                codigo: stockData.codigo,
+                nome: stockData.nome,
+                estoque_total: stockData.estoque_total,
+                estoque_provisionado: stockData.estoque_provisionado,
+                estoque_disponivel: stockData.estoque_disponivel,
+                ultimo_lancamento: ultimo_lancamento,
+                historico: historico
+            });
             setDetailOpen(true);
         } catch (error) {
             console.error("Erro ao buscar detalhes do produto:", error);
@@ -123,9 +153,11 @@ export const EstoquePage = () => {
         if (!codigoInput) return;
         setLoadingProduto(true);
         try {
+            // Assumindo que a rota de produtos busca por código se 'q' for numérico
             const response = await api.get(`/produtos?q=${codigoInput}`);
-            if (response.data.length === 1) {
-                const produtoEncontrado = response.data[0];
+            if (response.data.length > 0) {
+                // Pega o primeiro resultado (idealmente, busca por código é exata)
+                const produtoEncontrado = response.data.find((p: Produto) => String(p.codigo) === codigoInput) || response.data[0];
                 setSelectedProduto(produtoEncontrado);
                 setMovimento({ ...movimento, produto_id: produtoEncontrado.produto_id });
             } else {
@@ -139,19 +171,34 @@ export const EstoquePage = () => {
         }
     };
     
+    // ATUALIZADO: Colunas da grade principal
     const columns: GridColDef[] = [
         { field: 'codigo', headerName: 'Código', width: 130 },
         { field: 'nome', headerName: 'Produto', flex: 1 },
-        { field: 'quantidade_atual', headerName: 'Quantidade Atual', width: 180, type: 'number' },
+        { field: 'estoque_total', headerName: 'Estoque Físico', width: 150, type: 'number' },
+        { field: 'estoque_provisionado', headerName: 'Reservado', width: 150, type: 'number' },
+        { field: 'estoque_disponivel', headerName: 'Disponível', width: 150, type: 'number' },
     ];
 
+    // ATUALIZADO: Colunas do histórico (mais detalhes)
     const historicoColumns: GridColDef[] = [
+        { 
+            field: 'tipo_movimento', 
+            headerName: 'Tipo', 
+            width: 100,
+            renderCell: (params) => (
+                <Typography color={params.value === 'ENTRADA' ? 'success.main' : 'error.main'}>
+                    {params.value}
+                </Typography>
+            )
+        },
+        { field: 'quantidade', headerName: 'Quantidade', width: 100, type: 'number' },
         { field: 'numero_nota', headerName: 'Nota Fiscal', flex: 1 },
-        { field: 'quantidade', headerName: 'Quantidade', width: 150, type: 'number' },
+        { field: 'username', headerName: 'Usuário', width: 130 },
         {
             field: 'data_movimento',
             headerName: 'Data/Hora',
-            width: 200,
+            width: 170,
             type: 'dateTime',
             valueFormatter: (value) => value ? new Date(value).toLocaleString('pt-BR') : '',
         },
@@ -178,12 +225,17 @@ export const EstoquePage = () => {
             />
 
             <Box sx={{ height: '65vh', width: '100%' }}>
-                {/* CORREÇÃO 2: Adicionando o tipo ao parâmetro 'row' */}
-                <DataGrid rows={estoque} columns={columns} getRowId={(row: EstoqueItem) => row.produto_id} onRowDoubleClick={handleRowDoubleClick} />
+                <DataGrid 
+                    rows={estoque} 
+                    columns={columns} 
+                    getRowId={(row: EstoqueItem) => row.produto_id} 
+                    onRowDoubleClick={handleRowDoubleClick} 
+                />
             </Box>
 
+            {/* --- Diálogo de Entrada/Saída --- */}
             <Dialog open={isDialogOpen} onClose={handleCloseDialog} fullWidth>
-                <DialogTitle>{movimento.tipo_movimento === 'ENTRADA' ? 'Registrar Entrada com Nota' : 'Registrar Saída'}</DialogTitle>
+                <DialogTitle>{movimento.tipo_movimento === 'ENTRADA' ? 'Registrar Entrada com Nota' : 'Registrar Saída Manual'}</DialogTitle>
                 <DialogContent sx={{ pt: '20px !important' }}>
                     <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', mt: 2 }}>
                         <TextField
@@ -227,10 +279,14 @@ export const EstoquePage = () => {
                             renderInput={(params) => <TextField {...params} label="Nome do Produto *" />}
                         />
                     </Box>
-
-                    {movimento.tipo_movimento === 'ENTRADA' &&
-                        <TextField name="numero_nota" label="Número da Nota de Origem" fullWidth margin="normal" value={movimento.numero_nota || ''} onChange={handleMovimentoChange}/>
-                    }
+                    <TextField 
+                        name="numero_nota" 
+                        label={movimento.tipo_movimento === 'ENTRADA' ? "Número da Nota" : "Motivo da Saída"}
+                        fullWidth 
+                        margin="normal" 
+                        value={movimento.numero_nota || ''} 
+                        onChange={handleMovimentoChange}
+                    />
                     <TextField name="quantidade" label="Quantidade *" type="number" fullWidth margin="normal" value={movimento.quantidade} onChange={handleMovimentoChange}/>
                 </DialogContent>
                 <DialogActions>
@@ -239,20 +295,35 @@ export const EstoquePage = () => {
                 </DialogActions>
             </Dialog>
 
+            {/* --- Diálogo de Detalhes do Produto --- */}
             <Dialog open={isDetailOpen} onClose={() => setDetailOpen(false)} fullWidth maxWidth="lg">
                 {detailData && (
                     <>
+                        {/* ATUALIZADO: Título do diálogo com novos campos */}
                         <DialogTitle>
                             <Typography variant="h6">{detailData.codigo} - {detailData.nome}</Typography>
                             <Typography variant="body2" color="text.secondary">
-                                Qtd. Disponível: {Number(detailData.quantidade_atual).toLocaleString('pt-BR')} | Último Lançamento: {detailData.ultimo_lancamento ? new Date(detailData.ultimo_lancamento).toLocaleDateString('pt-BR') : 'N/A'}
+                                Físico: <strong>{Number(detailData.estoque_total).toLocaleString('pt-BR')}</strong> | 
+                                Reservado: {Number(detailData.estoque_provisionado).toLocaleString('pt-BR')} | 
+                                Disponível: <strong>{Number(detailData.estoque_disponivel).toLocaleString('pt-BR')}</strong>
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Último Lançamento: {detailData.ultimo_lancamento ? new Date(detailData.ultimo_lancamento).toLocaleString('pt-BR') : 'N/A'}
                             </Typography>
                         </DialogTitle>
                         <DialogContent>
-                            <Typography variant="subtitle1" gutterBottom>Histórico de Entradas</Typography>
+                            <Typography variant="subtitle1" gutterBottom>Histórico de Movimentações</Typography>
                             <Box sx={{ height: 400, width: '100%' }}>
-                                {/* CORREÇÃO 3: Adicionando o tipo ao parâmetro 'row' */}
-                                <DataGrid rows={detailData.historico} columns={historicoColumns} getRowId={(row: MovimentoHistorico) => row.movimento_id} />
+                                <DataGrid 
+                                    rows={detailData.historico} 
+                                    columns={historicoColumns} 
+                                    getRowId={(row: MovimentoHistorico) => row.movimento_id} 
+                                    initialState={{
+                                        sorting: {
+                                          sortModel: [{ field: 'data_movimento', sort: 'desc' }],
+                                        },
+                                      }}
+                                />
                             </Box>
                         </DialogContent>
                         <DialogActions>

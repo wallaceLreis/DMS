@@ -1,12 +1,15 @@
+// frontend/src/components/CotacaoResultsDialog.tsx
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography, CircularProgress, Avatar, Tabs, Tab, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
-import type { GridColDef } from '@mui/x-data-grid/models';
+import type { GridColDef, GridRowParams } from '@mui/x-data-grid/models';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
     ResponsiveContainer, ScatterChart, Scatter, ZAxis, Label
 } from 'recharts';
 import api from '../services/api';
+import { EtiquetaForm } from './EtiquetaForm'; // Certifique-se que o componente EtiquetaForm.tsx está na mesma pasta
 
 interface Resultado {
     resultado_id: number;
@@ -18,6 +21,10 @@ interface Resultado {
 }
 
 interface CotacaoData {
+    cotacao_id: number;
+    empresa_origem_id: number;
+    destinatario: string;
+    cep_destino: string;
     resultados: Resultado[];
 }
 
@@ -29,23 +36,16 @@ interface DialogProps {
 
 function TabPanel(props: { children?: React.ReactNode; index: number; value: number; }) {
     const { children, value, index, ...other } = props;
-    return (
-        <div role="tabpanel" hidden={value !== index} {...other}>
-            {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
-        </div>
-    );
+    return <div role="tabpanel" hidden={value !== index} {...other}>{value === index && <Box sx={{ pt: 3 }}>{children}</Box>}</div>;
 }
 
-// Tooltip customizado para o gráfico de dispersão
 const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
         return (
             <Box sx={{ bgcolor: 'white', p: 1.5, border: '1px solid #ccc', borderRadius: '4px' }}>
                 <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{data.name}</Typography>
-                <Typography variant="caption">
-                    Preço: {Number(data.preço).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </Typography><br />
+                <Typography variant="caption">Preço: {Number(data.preço).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</Typography><br />
                 <Typography variant="caption">Prazo: {data.prazo} dias</Typography>
             </Box>
         );
@@ -59,12 +59,17 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
     const [error, setError] = useState<string | null>(null);
     const [tabIndex, setTabIndex] = useState(0);
     const [chartType, setChartType] = useState<'preco' | 'prazo' | 'custoBeneficio'>('prazo');
+    const [selectedService, setSelectedService] = useState<Resultado | null>(null);
+    const [showEtiquetaTab, setShowEtiquetaTab] = useState(false);
 
     useEffect(() => {
         if (open && cotacaoId) {
             setLoading(true);
             setData(null);
             setError(null);
+            setTabIndex(0);
+            setSelectedService(null);
+            setShowEtiquetaTab(false);
             api.get(`/frete/cotacoes/${cotacaoId}`)
                 .then(res => setData(res.data))
                 .catch(err => {
@@ -74,6 +79,17 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
                 .finally(() => setLoading(false));
         }
     }, [open, cotacaoId]);
+
+    const handleRowDoubleClick = (params: GridRowParams<Resultado>) => {
+        setSelectedService(params.row);
+        setShowEtiquetaTab(true);
+        setTabIndex(2);
+    };
+
+    const handleEtiquetaSuccess = (url: string) => {
+        window.open(url, '_blank');
+        onClose();
+    };
 
     const chartData = data?.resultados.map(r => ({
         name: `${r.transportadora.slice(0, 10)} (${r.servico.slice(0, 10)})`,
@@ -88,27 +104,14 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
     const columns: GridColDef[] = [
         {
             field: 'url_logo', headerName: 'Logo', width: 80, sortable: false, filterable: false,
-            renderCell: (params) => (
-                <Avatar
-                    src={params.value}
-                    sx={{
-                        width: 56, height: 32, borderRadius: '4px',
-                        bgcolor: 'transparent', '& img': { objectFit: 'contain' }
-                    }}
-                    variant="square"
-                />
-            )
+            renderCell: (params) => <Avatar src={params.value} sx={{ width: 56, height: 32, borderRadius: '4px', bgcolor: 'transparent', '& img': { objectFit: 'contain' } }} variant="square" />
         },
         { field: 'transportadora', headerName: 'Transportadora', flex: 1 },
         { field: 'servico', headerName: 'Serviço', flex: 1 },
-        {
-            field: 'preco', headerName: 'Preço', width: 150, type: 'number',
-            valueFormatter: (value) => Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-        },
+        { field: 'preco', headerName: 'Preço', width: 150, type: 'number', valueFormatter: (value) => Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
         { field: 'prazo_entrega', headerName: 'Prazo (dias)', width: 150, type: 'number' },
     ];
 
-    // Geração do gráfico
     const renderChart = (): React.ReactElement => {
         switch (chartType) {
             case 'custoBeneficio':
@@ -167,38 +170,32 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
                             <Tabs value={tabIndex} onChange={(_e, val) => setTabIndex(val)}>
                                 <Tab label="Tabela de Opções" />
                                 <Tab label="Gráficos Comparativos" />
+                                {showEtiquetaTab && <Tab label="Gerar Etiqueta" />}
                             </Tabs>
                         </Box>
-
                         <TabPanel value={tabIndex} index={0}>
-                            <Box sx={{ height: 450, width: '100%', mt: 2 }}>
-                                <DataGrid
-                                    rows={data.resultados}
-                                    columns={columns}
-                                    getRowId={(row) => row.resultado_id}
-                                    density="standard"
-                                />
+                            <Typography variant="caption" sx={{ mt: 2, display: 'block' }}>Dê um clique duplo no frete desejado para gerar a etiqueta.</Typography>
+                            <Box sx={{ height: 450, width: '100%', mt: 1 }}>
+                                <DataGrid rows={data.resultados} columns={columns} getRowId={(row) => row.resultado_id} density="standard" onRowDoubleClick={handleRowDoubleClick} />
                             </Box>
                         </TabPanel>
-
                         <TabPanel value={tabIndex} index={1}>
                             <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-                                <ToggleButtonGroup
-                                    color="primary"
-                                    value={chartType}
-                                    exclusive
-                                    onChange={(_e, newType) => newType && setChartType(newType)}
-                                >
+                                <ToggleButtonGroup color="primary" value={chartType} exclusive onChange={(_e, newType) => newType && setChartType(newType)}>
                                     <ToggleButton value="prazo">Agilidade</ToggleButton>
                                     <ToggleButton value="preco">Menor Custo</ToggleButton>
                                     <ToggleButton value="custoBeneficio">Custo-Benefício</ToggleButton>
                                 </ToggleButtonGroup>
                             </Box>
-
                             <ResponsiveContainer width="100%" height={400}>
                                 {renderChart()}
                             </ResponsiveContainer>
                         </TabPanel>
+                        {showEtiquetaTab && (
+                            <TabPanel value={tabIndex} index={2}>
+                                {selectedService && <EtiquetaForm cotacaoData={data} selectedService={selectedService} onSuccess={handleEtiquetaSuccess} />}
+                            </TabPanel>
+                        )}
                     </>
                 )}
             </DialogContent>
