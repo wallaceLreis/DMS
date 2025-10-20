@@ -156,21 +156,6 @@ Abra 3 terminais separados.
 1.  Abra seu navegador e acesse: `http://localhost:5173`.
 2.  Use as credenciais padrão do superusuário para fazer login:
     - **Usuário**: `sup`
-    - **Senha**: `123456`
+    - **Senha**: `admin`
 
-> **Nota**: A senha `123456` corresponde ao hash gerado por `bcryptjs` e inserido no arquivo `DB/init_database.sql`.
-
-## 6. Conclusão e Trabalhos Futuros
-
-### Resultados Alcançados
-
-O projeto DMS atingiu com sucesso seus objetivos como Prova de Conceito, entregando uma plataforma funcional que integra de forma coesa os principais processos de gestão de um pequeno negócio. O sistema demonstra a viabilidade da arquitetura proposta e resolve o problema central da descentralização de informações.
-
-### Trabalhos Futuros
-
-- **Dashboard Analítico**: Implementar um painel com métricas chave (ex: produtos mais vendidos, volume de expedição, custos de frete).
-- **Gestão de Múltiplos Depósitos**: Evoluir o sistema para suportar operações com mais de um centro de distribuição.
-- **Níveis de Acesso**: Criar diferentes perfis de usuário (ex: administrador, operador de estoque, financeiro) com permissões específicas.
-- **Logs de Auditoria**: Registrar ações críticas dos usuários (ex: alterações de estoque, exclusão de produtos) para maior rastreabilidade.
-- **Testes Automatizados**: Adicionar testes unitários e de integração para garantir a estabilidade e a qualidade do código.
-- **Otimização de CI/CD**: Configurar um pipeline de integração e entrega contínua para automatizar o build e o deploy da aplicação.
+> **Nota**: A senha `admin` corresponde ao hash gerado por `bcryptjs` e inserido no arquivo `DB/init_database.sql`.
