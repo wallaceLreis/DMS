@@ -1,7 +1,7 @@
 // frontend/src/components/CotacaoResultsDialog.tsx
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography, CircularProgress, Avatar, Tabs, Tab, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography, CircularProgress, Avatar, Tabs, Tab, ToggleButtonGroup, ToggleButton, Alert } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridColDef, GridRowParams } from '@mui/x-data-grid/models';
 import {
@@ -9,7 +9,7 @@ import {
     ResponsiveContainer, ScatterChart, Scatter, ZAxis, Label
 } from 'recharts';
 import api from '../services/api';
-import { EtiquetaForm } from './EtiquetaForm'; // Certifique-se que o componente EtiquetaForm.tsx está na mesma pasta
+import { EtiquetaForm } from './EtiquetaForm';
 
 interface Resultado {
     resultado_id: number;
@@ -24,7 +24,9 @@ interface CotacaoData {
     cotacao_id: number;
     empresa_origem_id: number;
     destinatario: string;
+    destinatario_sobrenome: string;
     cep_destino: string;
+    status: string;
     resultados: Resultado[];
 }
 
@@ -62,6 +64,8 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
     const [selectedService, setSelectedService] = useState<Resultado | null>(null);
     const [showEtiquetaTab, setShowEtiquetaTab] = useState(false);
 
+    const isReadOnly = data?.status === 'INVALIDA';
+
     useEffect(() => {
         if (open && cotacaoId) {
             setLoading(true);
@@ -81,6 +85,8 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
     }, [open, cotacaoId]);
 
     const handleRowDoubleClick = (params: GridRowParams<Resultado>) => {
+        if (isReadOnly) return;
+        
         setSelectedService(params.row);
         setShowEtiquetaTab(true);
         setTabIndex(2);
@@ -130,7 +136,6 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
                         <Scatter name="Opções de Frete" data={chartData} fill="#8884d8" />
                     </ScatterChart>
                 );
-
             case 'preco':
                 return (
                     <BarChart data={sortedChartData} margin={{ top: 5, right: 20, left: 20, bottom: 70 }}>
@@ -142,7 +147,6 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
                         <Bar dataKey="preço" fill="#82ca9d" name="Preço (R$)" />
                     </BarChart>
                 );
-
             case 'prazo':
             default:
                 return (
@@ -166,6 +170,11 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
                 {!loading && error && <Typography color="error" sx={{ p: 4 }}>{error}</Typography>}
                 {!loading && data && (
                     <>
+                        {isReadOnly && (
+                            <Alert severity="warning" sx={{ mb: 2 }}>
+                                Esta cotação expirou e é inválida. Não é possível gerar uma nova etiqueta a partir dela.
+                            </Alert>
+                        )}
                         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                             <Tabs value={tabIndex} onChange={(_e, val) => setTabIndex(val)}>
                                 <Tab label="Tabela de Opções" />
@@ -174,9 +183,19 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
                             </Tabs>
                         </Box>
                         <TabPanel value={tabIndex} index={0}>
-                            <Typography variant="caption" sx={{ mt: 2, display: 'block' }}>Dê um clique duplo no frete desejado para gerar a etiqueta.</Typography>
+                            {!isReadOnly && (
+                                <Typography variant="caption" sx={{ mt: 2, display: 'block' }}>
+                                    Dê um clique duplo no frete desejado para gerar a etiqueta.
+                                </Typography>
+                            )}
                             <Box sx={{ height: 450, width: '100%', mt: 1 }}>
-                                <DataGrid rows={data.resultados} columns={columns} getRowId={(row) => row.resultado_id} density="standard" onRowDoubleClick={handleRowDoubleClick} />
+                                <DataGrid 
+                                    rows={data.resultados} 
+                                    columns={columns} 
+                                    getRowId={(row) => row.resultado_id} 
+                                    density="standard" 
+                                    onRowDoubleClick={handleRowDoubleClick} 
+                                />
                             </Box>
                         </TabPanel>
                         <TabPanel value={tabIndex} index={1}>
@@ -199,9 +218,7 @@ export const CotacaoResultsDialog = ({ open, onClose, cotacaoId }: DialogProps) 
                     </>
                 )}
             </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>Fechar</Button>
-            </DialogActions>
+            <DialogActions><Button onClick={onClose}>Fechar</Button></DialogActions>
         </Dialog>
     );
 };
