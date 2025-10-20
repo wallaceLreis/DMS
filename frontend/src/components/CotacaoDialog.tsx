@@ -13,15 +13,11 @@ import api from '../services/api';
 import axios from 'axios';
 import type { Produto, Empresa } from '../types';
 
-// --- FUNÇÃO DE MÁSCARA ---
 const formatCEP = (value: string) => {
     if (!value) return '';
     const cep = value.replace(/\D/g, '');
-    return cep
-        .replace(/^(\d{5})(\d)/, '$1-$2')
-        .substring(0, 9);
+    return cep.replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9);
 };
-
 
 interface CotacaoDialogProps {
     open: boolean;
@@ -47,14 +43,13 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
     const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
     const [cepDestino, setCepDestino] = useState('');
     const [destinatario, setDestinatario] = useState('');
+    const [sobrenome, setSobrenome] = useState('');
     const [itens, setItens] = useState<Item[]>([]);
     const [selectedProduto, setSelectedProduto] = useState<Produto | null>(null);
     const [quantidade, setQuantidade] = useState(1);
     const [enderecoDestino, setEnderecoDestino] = useState<Endereco | null>(null);
     const [cepLoading, setCepLoading] = useState(false);
-    
     const [codigo, setCodigo] = useState('');
-    // ATUALIZADO: Renomeado para 'availableStock' para clareza
     const [availableStock, setAvailableStock] = useState<number | null>(null);
     const [stockLoading, setStockLoading] = useState(false);
 
@@ -62,11 +57,11 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         if (open) {
             api.get('/empresas').then(res => setEmpresas(res.data));
             api.get('/produtos').then(res => setProdutos(res.data));
-            
             setItens([]);
             setSelectedEmpresa(null);
             setCepDestino('');
             setDestinatario('');
+            setSobrenome('');
             setSelectedProduto(null);
             setQuantidade(1);
             setEnderecoDestino(null);
@@ -76,22 +71,16 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         }
     }, [open]);
 
-    // ATUALIZADO: Lê 'estoque_disponivel' da API
     const handleProdutoChange = async (val: Produto | null) => {
         setSelectedProduto(val);
         setAvailableStock(null);
         setCodigo(val?.codigo ? String(val.codigo) : '');
-
         if (val && val.produto_id) {
             setStockLoading(true);
             try {
-                // A API agora retorna { ..., estoque_disponivel: X }
                 const res = await api.get(`/estoque?produto_id=${val.produto_id}`);
-                
-                // Lê o campo correto da resposta
                 const stock = res.data.estoque_disponivel ?? 0;
                 setAvailableStock(stock);
-
             } catch (error) {
                 console.error("Erro ao buscar estoque:", error);
                 setAvailableStock(0);
@@ -104,7 +93,6 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
     const handleCodigoSearch = () => {
         if (!codigo) return;
         const foundProduct = produtos.find(p => String(p.codigo) === codigo);
-        
         if (foundProduct) {
             handleProdutoChange(foundProduct);
         } else {
@@ -113,29 +101,21 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         }
     };
 
-    // ATUALIZADO: Valida contra 'availableStock'
     const handleAddItem = () => {
         if (!selectedProduto || !selectedProduto.produto_id || quantidade <= 0) return;
-
         if (stockLoading) {
             alert("Aguarde, verificando estoque disponível...");
             return;
         }
-        
         if (availableStock === null || quantidade > availableStock) {
             alert(`Quantidade excede o estoque disponível. Disponível: ${availableStock ?? 0}`);
             return;
         }
-
         if (itens.some(item => item.produto_id === selectedProduto.produto_id)) {
             alert("Este produto já foi adicionado à cotação.");
             return;
         }
-        const newItem: Item = {
-            ...selectedProduto,
-            produto_id: selectedProduto.produto_id,
-            quantidade: quantidade
-        };
+        const newItem: Item = { ...selectedProduto, produto_id: selectedProduto.produto_id, quantidade: quantidade };
         setItens([...itens, newItem]);
         setSelectedProduto(null);
         setQuantidade(1);
@@ -148,7 +128,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
     };
 
     const handleSave = () => {
-        if (!selectedEmpresa || !cepDestino || !destinatario || itens.length === 0) {
+        if (!selectedEmpresa || !cepDestino || !destinatario || !sobrenome || itens.length === 0) {
             alert("Preencha todos os campos obrigatórios.");
             return;
         }
@@ -156,6 +136,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
             empresa_origem_id: selectedEmpresa.empresa_id,
             cep_destino: cepDestino.replace(/\D/g, ''),
             destinatario: destinatario,
+            destinatario_sobrenome: sobrenome,
             itens: itens.map(({ produto_id, quantidade }) => ({ produto_id, quantidade }))
         };
         onSave(data);
@@ -167,7 +148,6 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
             setEnderecoDestino(null);
             return;
         }
-
         setCepLoading(true);
         try {
             const response = await axios.get(`https://viacep.com.br/ws/${cep}/json/`);
@@ -189,7 +169,6 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
         <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
             <DialogTitle>Nova Cotação de Frete</DialogTitle>
             <DialogContent>
-                {/* --- Seção 1: Dados do Envio --- */}
                 <Box sx={{ p: 2 }}>
                     <Typography variant="h6">1. Dados do Envio</Typography>
                     <Autocomplete
@@ -197,17 +176,24 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                         getOptionLabel={(opt) => opt.nome_fantasia || ''}
                         value={selectedEmpresa}
                         onChange={(_e, val) => setSelectedEmpresa(val)}
-                        renderInput={(params) => (
-                            <TextField {...params} label="Empresa de Origem *" margin="normal" />
-                        )}
+                        renderInput={(params) => <TextField {...params} label="Empresa de Origem *" margin="normal" />}
                     />
-                    <TextField
-                        label="Nome do Cliente / Destinatário *"
-                        value={destinatario}
-                        onChange={(e) => setDestinatario(e.target.value)}
-                        fullWidth
-                        margin="normal"
-                    />
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                        <TextField
+                            label="Nome do Destinatário *"
+                            value={destinatario}
+                            onChange={(e) => setDestinatario(e.target.value)}
+                            fullWidth
+                            margin="normal"
+                        />
+                        <TextField
+                            label="Sobrenome *"
+                            value={sobrenome}
+                            onChange={(e) => setSobrenome(e.target.value)}
+                            fullWidth
+                            margin="normal"
+                        />
+                    </Box>
                     <TextField
                         label="CEP de Destino *"
                         value={formatCEP(cepDestino)}
@@ -216,32 +202,17 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                         fullWidth
                         margin="normal"
                         inputProps={{ maxLength: 9 }}
-                        InputProps={{
-                            endAdornment: cepLoading && <CircularProgress size={20} />
-                        }}
+                        InputProps={{ endAdornment: cepLoading && <CircularProgress size={20} /> }}
                     />
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: 2,
-                            bgcolor: '#f5f5f5',
-                            p: 2,
-                            borderRadius: 1,
-                            mt: 1
-                        }}
-                    >
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, bgcolor: '#f5f5f5', p: 2, borderRadius: 1, mt: 1 }}>
                         <TextField label="Rua" value={enderecoDestino?.logradouro || ''} InputProps={{ readOnly: true }} variant="standard" sx={{ flex: '1 1 60%' }} />
                         <TextField label="Bairro" value={enderecoDestino?.bairro || ''} InputProps={{ readOnly: true }} variant="standard" sx={{ flex: '1 1 35%' }} />
                         <TextField label="Cidade" value={enderecoDestino?.localidade || ''} InputProps={{ readOnly: true }} variant="standard" sx={{ flex: '1 1 60%' }} />
                         <TextField label="UF" value={enderecoDestino?.uf || ''} InputProps={{ readOnly: true }} variant="standard" sx={{ flex: '1 1 35%' }} />
                     </Box>
                 </Box>
-
-                {/* --- SEÇÃO 2: Itens da Cotação --- */}
                 <Box sx={{ p: 2 }}>
                     <Typography variant="h6">2. Itens da Cotação</Typography>
-                    
                     <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
                         <TextField
                             label="Código *"
@@ -252,9 +223,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                             InputProps={{
                                 endAdornment: (
                                     <InputAdornment position="end">
-                                        <IconButton onClick={handleCodigoSearch} edge="end">
-                                            <SearchIcon />
-                                        </IconButton>
+                                        <IconButton onClick={handleCodigoSearch} edge="end"><SearchIcon /></IconButton>
                                     </InputAdornment>
                                 )
                             }}
@@ -265,9 +234,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                             value={selectedProduto}
                             onChange={(_e, val) => handleProdutoChange(val)}
                             fullWidth
-                            renderInput={(params) => (
-                                <TextField {...params} label="Nome do Produto *" />
-                            )}
+                            renderInput={(params) => <TextField {...params} label="Nome do Produto *" />}
                         />
                         <TextField
                             label="Qtd."
@@ -276,42 +243,19 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
                             onChange={(e) => setQuantidade(Number(e.target.value))}
                             sx={{ width: 100 }}
                         />
-                        <Button 
-                            onClick={handleAddItem} 
-                            variant="outlined" 
-                            sx={{ minWidth: 56, height: 56 }}
-                        >
+                        <Button onClick={handleAddItem} variant="outlined" sx={{ minWidth: 56, height: 56 }}>
                             <AddIcon />
                         </Button>
                     </Box>
-
-                    {/* ATUALIZADO: Exibe 'Estoque Disponível' */}
                     <Box sx={{ mb: 2, minHeight: '20px', textAlign: 'center' }}>
-                        {stockLoading ? (
-                            <CircularProgress size={24} />
-                        ) : (
-                            availableStock !== null && (
-                                <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>
-                                    Estoque Disponível: {availableStock}
-                                </Typography>
-                            )
-                        )}
+                        {stockLoading ? <CircularProgress size={24} /> : (availableStock !== null && <Typography variant="caption" display="block" sx={{ fontWeight: 'bold' }}>Estoque Disponível: {availableStock}</Typography>)}
                     </Box>
-                    
                     <List dense>
                         {itens.map(item => (
                             <ListItem key={item.produto_id}>
-                                <ListItemText
-                                    primary={item.nome}
-                                    secondary={`Quantidade: ${item.quantidade}`}
-                                />
+                                <ListItemText primary={item.nome} secondary={`Quantidade: ${item.quantidade}`} />
                                 <ListItemSecondaryAction>
-                                    <IconButton
-                                        edge="end"
-                                        onClick={() => handleRemoveItem(item.produto_id!)}
-                                    >
-                                        <DeleteIcon />
-                                    </IconButton>
+                                    <IconButton edge="end" onClick={() => handleRemoveItem(item.produto_id!)}><DeleteIcon /></IconButton>
                                 </ListItemSecondaryAction>
                             </ListItem>
                         ))}
@@ -320,9 +264,7 @@ export const CotacaoDialog = ({ open, onClose, onSave }: CotacaoDialogProps) => 
             </DialogContent>
             <DialogActions>
                 <Button onClick={onClose}>Cancelar</Button>
-                <Button onClick={handleSave} variant="contained">
-                    Processar Cotação
-                </Button>
+                <Button onClick={handleSave} variant="contained">Processar Cotação</Button>
             </DialogActions>
         </Dialog>
     );
