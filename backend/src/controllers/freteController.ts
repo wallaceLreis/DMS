@@ -4,6 +4,15 @@ import { Request, Response } from 'express';
 import axios from 'axios';
 import pool from '../config/db';
 
+// Interface para requisições autenticadas (necessária para pegar o req.user.id)
+interface AuthRequest extends Request {
+  user?: {
+    id: number;
+    username: string;
+    role: string;
+  };
+}
+
 interface CotacaoItem {
   produto_id: number;
   quantidade: number;
@@ -137,11 +146,14 @@ export const createCotacao = async (req: Request, res: Response) => {
     }
 };
 
-export const generateLabel = async (req: Request, res: Response) => {
+export const generateLabel = async (req: AuthRequest, res: Response) => {
     const { cotacao_id, resultado_id, from, to } = req.body;
     const client = await pool.connect();
+    const usuario_id = req.user?.id;
 
     try {
+        await client.query('BEGIN');
+
         const resultadoRes = await client.query('SELECT service_id FROM cotacao_resultados WHERE resultado_id = $1', [resultado_id]);
         const itensRes = await client.query('SELECT p.*, ci.quantidade FROM cotacao_itens ci JOIN produtos p ON ci.produto_id = p.produto_id WHERE ci.cotacao_id = $1', [cotacao_id]);
         
@@ -191,11 +203,6 @@ export const generateLabel = async (req: Request, res: Response) => {
         const orderId = cartResponse.data.id;
         if (!orderId) throw new Error('Falha ao adicionar item ao carrinho.');
 
-        await client.query(
-            `UPDATE cotacoes SET order_id = $1, status = 'FINALIZADO' WHERE cotacao_id = $2`,
-            [orderId, cotacao_id]
-        );
-
         await axios.post('https://sandbox.melhorenvio.com.br/api/v2/me/shipment/checkout', { orders: [orderId] }, { headers });
         await axios.post('https://sandbox.melhorenvio.com.br/api/v2/me/shipment/generate', { orders: [orderId] }, { headers });
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -204,9 +211,32 @@ export const generateLabel = async (req: Request, res: Response) => {
         const printUrl = printResponse.data.url;
         if (!printUrl) throw new Error('Falha ao obter URL de impressão.');
 
+        for (const item of itens) {
+            await client.query(
+                `INSERT INTO estoque_movimentos (produto_id, usuario_id, tipo_movimento, quantidade, observacao)
+                 VALUES ($1, $2, 'SAIDA', $3, $4)`,
+                [item.produto_id, usuario_id, item.quantidade, `Saída automática - Cotação #${cotacao_id}`]
+            );
+
+            await client.query(
+                `UPDATE produtos 
+                 SET estoque_total = estoque_total - $1, 
+                     estoque_provisionado = estoque_provisionado - $1
+                 WHERE produto_id = $2`,
+                [item.quantidade, item.produto_id]
+            );
+        }
+
+        await client.query(
+            `UPDATE cotacoes SET order_id = $1, status = 'FINALIZADO' WHERE cotacao_id = $2`,
+            [orderId, cotacao_id]
+        );
+        
+        await client.query('COMMIT');
         res.json({ url: printUrl });
 
     } catch (error: any) {
+        await client.query('ROLLBACK');
         const errorMessage = error.response?.data || { message: "Erro interno ao gerar a etiqueta." };
         console.error("Erro ao gerar etiqueta:", errorMessage);
         res.status(500).json(errorMessage);
@@ -240,5 +270,89 @@ export const reprintLabel = async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error("Erro ao reimprimir etiqueta:", error.response?.data || error.message);
         res.status(500).json({ message: "Erro interno ao reimprimir a etiqueta." });
+    }
+};
+
+export const deleteCotacao = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const cotacaoRes = await client.query('SELECT status FROM cotacoes WHERE cotacao_id = $1', [id]);
+        if (cotacaoRes.rowCount === 0) {
+            return res.status(404).json({ message: "Cotação não encontrada." });
+        }
+        const status = cotacaoRes.rows[0].status;
+        if (status === 'FINALIZADO' || status === 'INVALIDA') {
+            return res.status(400).json({ message: `Cotações com status "${status}" não podem ser excluídas.` });
+        }
+
+        const itensRes = await client.query('SELECT produto_id, quantidade FROM cotacao_itens WHERE cotacao_id = $1', [id]);
+        
+        for (const item of itensRes.rows) {
+            await client.query(
+                `UPDATE produtos SET estoque_provisionado = estoque_provisionado - $1 WHERE produto_id = $2`,
+                [item.quantidade, item.produto_id]
+            );
+        }
+
+        await client.query('DELETE FROM cotacao_resultados WHERE cotacao_id = $1', [id]);
+        await client.query('DELETE FROM cotacao_itens WHERE cotacao_id = $1', [id]);
+        await client.query('DELETE FROM cotacoes WHERE cotacao_id = $1', [id]);
+
+        await client.query('COMMIT');
+        res.status(204).send();
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("Erro ao deletar cotação:", error);
+        res.status(500).json({ message: "Erro interno ao deletar a cotação." });
+    } finally {
+        client.release();
+    }
+};
+
+export const invalidateOldCotacoes = async () => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const oldCotacoesRes = await client.query(
+            `SELECT cotacao_id FROM cotacoes WHERE status = 'CONCLUIDO' AND data_criacao < NOW() - INTERVAL '24 hours'`
+        );
+
+        if (oldCotacoesRes.rowCount === 0) {
+            console.log("Scheduler: Nenhuma cotação antiga para invalidar.");
+            await client.query('COMMIT');
+            return;
+        }
+
+        const cotacaoIds = oldCotacoesRes.rows.map(c => c.cotacao_id);
+
+        for (const id of cotacaoIds) {
+            const itensRes = await client.query('SELECT produto_id, quantidade FROM cotacao_itens WHERE cotacao_id = $1', [id]);
+            for (const item of itensRes.rows) {
+                await client.query(
+                    `UPDATE produtos SET estoque_provisionado = estoque_provisionado - $1 WHERE produto_id = $2`,
+                    [item.quantidade, item.produto_id]
+                );
+            }
+        }
+
+        await client.query(
+            `UPDATE cotacoes SET status = 'INVALIDA' WHERE cotacao_id = ANY($1::int[])`,
+            [cotacaoIds]
+        );
+
+        await client.query('COMMIT');
+        console.log(`Scheduler: ${cotacaoIds.length} cotações foram invalidadas.`);
+        
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("Erro no agendador de invalidação de cotações:", error);
+    } finally {
+        client.release();
     }
 };
