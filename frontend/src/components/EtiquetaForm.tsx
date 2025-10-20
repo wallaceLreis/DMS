@@ -2,7 +2,36 @@
 
 import { useState, useEffect } from 'react';
 import { Box, TextField, Typography, Button, CircularProgress, Alert } from '@mui/material';
+import axios from 'axios';
 import api from '../services/api';
+
+// --- FUNÇÕES DE MÁSCARA ADICIONADAS ---
+const formatPhone = (value: string) => {
+    if (!value) return '';
+    const phone = value.replace(/\D/g, '');
+    if (phone.length > 10) {
+        return phone.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3').substring(0, 15);
+    }
+    return phone.replace(/^(\d{2})(\d{4})(\d{4})/, '($1) $2-$3').substring(0, 14);
+};
+
+// Máscara que se adapta para CPF ou CNPJ enquanto o usuário digita
+const formatCPF_CNPJ = (value: string) => {
+    const rawValue = value.replace(/\D/g, '');
+    if (rawValue.length <= 11) { // Formato CPF
+        return rawValue
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d)/, '$1.$2')
+            .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    } else { // Formato CNPJ
+        return rawValue
+            .replace(/^(\d{2})(\d)/, '$1.$2')
+            .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+            .replace(/\.(\d{3})(\d)/, '.$1/$2')
+            .replace(/(\d{4})(\d)/, '$1-$2');
+    }
+};
+
 
 interface FormProps {
     cotacaoData: any;
@@ -31,6 +60,7 @@ const initialFormState: Endereco = {
 };
 
 export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormProps) => {
+    // CORREÇÃO AQUI: Removido o '=' extra
     const [from, setFrom] = useState<Endereco>(initialFormState);
     const [to, setTo] = useState<Endereco>(initialFormState);
     const [loading, setLoading] = useState(true);
@@ -39,12 +69,14 @@ export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormPr
 
     useEffect(() => {
         const fetchInitialData = async () => {
+            setLoading(true);
+            setError(null);
             try {
                 const empresaRes = await api.get(`/empresas/${cotacaoData.empresa_origem_id}`);
                 const empresa = empresaRes.data;
                 setFrom({
                     name: empresa.razao_social,
-                    phone: '',
+                    phone: empresa.telefone?.replace(/\D/g, '') || '',
                     email: empresa.email,
                     document: empresa.cnpj.replace(/\D/g, ''),
                     address: empresa.logouro,
@@ -57,9 +89,25 @@ export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormPr
                     postal_code: empresa.cep.replace(/\D/g, '')
                 });
 
-                setTo(prev => ({ ...prev, name: cotacaoData.destinatario, postal_code: cotacaoData.cep_destino.replace(/\D/g, '') }));
+                const destCep = cotacaoData.cep_destino.replace(/\D/g, '');
+                setTo(prev => ({ ...prev, name: cotacaoData.destinatario, postal_code: destCep }));
+                
+                if (destCep.length === 8) {
+                    const viaCepRes = await axios.get(`https://viacep.com.br/ws/${destCep}/json/`);
+                    if (!viaCepRes.data.erro) {
+                        const { logradouro, bairro, localidade, uf } = viaCepRes.data;
+                        setTo(prev => ({
+                            ...prev,
+                            address: logradouro,
+                            district: bairro,
+                            city: localidade,
+                            state_abbr: uf
+                        }));
+                    }
+                }
             } catch (err) {
-                setError("Erro ao carregar dados da empresa de origem.");
+                console.error("Erro ao carregar dados iniciais:", err);
+                setError("Erro ao carregar dados da empresa de origem ou do destinatário.");
             } finally {
                 setLoading(false);
             }
@@ -68,7 +116,13 @@ export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormPr
     }, [cotacaoData]);
 
     const handleChange = (setter: React.Dispatch<React.SetStateAction<Endereco>>) => (e: React.ChangeEvent<HTMLInputElement>) => {
-        setter(prev => ({ ...prev, [e.target.name]: e.target.value }));
+        const { name, value } = e.target;
+        // Salva apenas os dígitos para campos com máscara
+        if (name === 'phone' || name === 'document' || name === 'postal_code') {
+            setter(prev => ({ ...prev, [name]: value.replace(/\D/g, '') }));
+        } else {
+            setter(prev => ({ ...prev, [name]: e.target.value }));
+        }
     };
 
     const handleSubmit = async () => {
@@ -84,6 +138,7 @@ export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormPr
             const response = await api.post('/frete/gerar-etiqueta', payload);
             onSuccess(response.data.url);
         } catch (err: any) {
+            // Exibe a mensagem de erro específica vinda do backend
             setError(err.response?.data?.message || "Ocorreu um erro ao gerar a etiqueta.");
         } finally {
             setSubmitting(false);
@@ -99,16 +154,33 @@ export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormPr
                 <Box>
                     <Typography variant="subtitle1" gutterBottom>Remetente (Origem)</Typography>
                     <TextField label="Nome/Razão Social *" name="name" value={from.name} onChange={handleChange(setFrom)} fullWidth margin="dense" required />
-                    <TextField label="CPF/CNPJ *" name="document" value={from.document} onChange={handleChange(setFrom)} fullWidth margin="dense" required />
+                    <TextField 
+                        label="CPF/CNPJ *" 
+                        name="document" 
+                        value={formatCPF_CNPJ(from.document)}
+                        onChange={handleChange(setFrom)} 
+                        fullWidth 
+                        margin="dense" 
+                        required 
+                        inputProps={{ maxLength: 18 }}
+                    />
                     <TextField label="Email *" name="email" value={from.email} onChange={handleChange(setFrom)} fullWidth margin="dense" required />
-                    <TextField label="Telefone *" name="phone" value={from.phone} onChange={handleChange(setFrom)} fullWidth margin="dense" required />
+                    <TextField label="Telefone *" name="phone" value={formatPhone(from.phone)} onChange={handleChange(setFrom)} fullWidth margin="dense" required inputProps={{maxLength: 15}} />
                 </Box>
                 <Box>
                     <Typography variant="subtitle1" gutterBottom>Destinatário (Destino)</Typography>
                     <TextField label="Nome/Razão Social *" name="name" value={to.name} onChange={handleChange(setTo)} fullWidth margin="dense" required />
-                    <TextField label="CPF/CNPJ" name="document" value={to.document} onChange={handleChange(setTo)} fullWidth margin="dense" />
+                    <TextField 
+                        label="CPF/CNPJ" 
+                        name="document" 
+                        value={formatCPF_CNPJ(to.document)}
+                        onChange={handleChange(setTo)} 
+                        fullWidth 
+                        margin="dense" 
+                        inputProps={{ maxLength: 18 }}
+                    />
                     <TextField label="Email *" name="email" value={to.email} onChange={handleChange(setTo)} fullWidth margin="dense" required />
-                    <TextField label="Telefone" name="phone" value={to.phone} onChange={handleChange(setTo)} fullWidth margin="dense" />
+                    <TextField label="Telefone" name="phone" value={formatPhone(to.phone)} onChange={handleChange(setTo)} fullWidth margin="dense" inputProps={{maxLength: 15}} />
                     <TextField label="Endereço *" name="address" value={to.address} onChange={handleChange(setTo)} fullWidth margin="dense" required />
                     <TextField label="Número *" name="number" value={to.number} onChange={handleChange(setTo)} fullWidth margin="dense" required />
                     <TextField label="Complemento" name="complement" value={to.complement} onChange={handleChange(setTo)} fullWidth margin="dense" />
