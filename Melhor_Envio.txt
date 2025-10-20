@@ -1,0 +1,1 @@
+para gerar o token do melhor envio selecione as opções shipping-calculate, cart-write, shipping-checkout, shipping-generate, cart-read, transactions-read, shipping-tracking, orders-read
