@@ -118,9 +118,11 @@ CREATE TABLE cotacoes (
     cotacao_id SERIAL PRIMARY KEY,
     empresa_origem_id INTEGER NOT NULL REFERENCES empresas(empresa_id) ON DELETE RESTRICT,
     cep_destino VARCHAR(9) NOT NULL,
-    status VARCHAR(20) DEFAULT 'PROCESSANDO' NOT NULL,
-    data_criacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    destinatario VARCHAR(255)
+    destinatario VARCHAR(255),
+    destinatario_sobrenome VARCHAR(255), -- <<< NOVA COLUNA
+    order_id VARCHAR(255), -- <<< NOVA COLUNA (para reimpressão da etiqueta)
+    status VARCHAR(20) DEFAULT 'PROCESSANDO' NOT NULL, -- Valores podem ser PROCESSANDO, CONCLUIDO, ERRO, FINALIZADO
+    data_criacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- cotacao_itens

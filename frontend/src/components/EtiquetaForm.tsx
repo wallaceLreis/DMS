@@ -5,7 +5,6 @@ import { Box, TextField, Typography, Button, CircularProgress, Alert } from '@mu
 import axios from 'axios';
 import api from '../services/api';
 
-// --- FUNÇÕES DE MÁSCARA ADICIONADAS ---
 const formatPhone = (value: string) => {
     if (!value) return '';
     const phone = value.replace(/\D/g, '');
@@ -15,15 +14,14 @@ const formatPhone = (value: string) => {
     return phone.replace(/^(\d{2})(\d{4})(\d{4})/, '($1) $2-$3').substring(0, 14);
 };
 
-// Máscara que se adapta para CPF ou CNPJ enquanto o usuário digita
 const formatCPF_CNPJ = (value: string) => {
     const rawValue = value.replace(/\D/g, '');
-    if (rawValue.length <= 11) { // Formato CPF
+    if (rawValue.length <= 11) {
         return rawValue
             .replace(/(\d{3})(\d)/, '$1.$2')
             .replace(/(\d{3})(\d)/, '$1.$2')
             .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-    } else { // Formato CNPJ
+    } else {
         return rawValue
             .replace(/^(\d{2})(\d)/, '$1.$2')
             .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
@@ -31,7 +29,6 @@ const formatCPF_CNPJ = (value: string) => {
             .replace(/(\d{4})(\d)/, '$1-$2');
     }
 };
-
 
 interface FormProps {
     cotacaoData: any;
@@ -60,7 +57,6 @@ const initialFormState: Endereco = {
 };
 
 export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormProps) => {
-    // CORREÇÃO AQUI: Removido o '=' extra
     const [from, setFrom] = useState<Endereco>(initialFormState);
     const [to, setTo] = useState<Endereco>(initialFormState);
     const [loading, setLoading] = useState(true);
@@ -90,7 +86,8 @@ export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormPr
                 });
 
                 const destCep = cotacaoData.cep_destino.replace(/\D/g, '');
-                setTo(prev => ({ ...prev, name: cotacaoData.destinatario, postal_code: destCep }));
+                const nomeCompleto = `${cotacaoData.destinatario} ${cotacaoData.destinatario_sobrenome}`;
+                setTo(prev => ({ ...prev, name: nomeCompleto, postal_code: destCep }));
                 
                 if (destCep.length === 8) {
                     const viaCepRes = await axios.get(`https://viacep.com.br/ws/${destCep}/json/`);
@@ -117,7 +114,6 @@ export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormPr
 
     const handleChange = (setter: React.Dispatch<React.SetStateAction<Endereco>>) => (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        // Salva apenas os dígitos para campos com máscara
         if (name === 'phone' || name === 'document' || name === 'postal_code') {
             setter(prev => ({ ...prev, [name]: value.replace(/\D/g, '') }));
         } else {
@@ -138,8 +134,7 @@ export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormPr
             const response = await api.post('/frete/gerar-etiqueta', payload);
             onSuccess(response.data.url);
         } catch (err: any) {
-            // Exibe a mensagem de erro específica vinda do backend
-            setError(err.response?.data?.message || "Ocorreu um erro ao gerar a etiqueta.");
+            setError(err.response?.data?.message || err.response?.data?.error || "Ocorreu um erro ao gerar a etiqueta.");
         } finally {
             setSubmitting(false);
         }
@@ -154,31 +149,14 @@ export const EtiquetaForm = ({ cotacaoData, selectedService, onSuccess }: FormPr
                 <Box>
                     <Typography variant="subtitle1" gutterBottom>Remetente (Origem)</Typography>
                     <TextField label="Nome/Razão Social *" name="name" value={from.name} onChange={handleChange(setFrom)} fullWidth margin="dense" required />
-                    <TextField 
-                        label="CPF/CNPJ *" 
-                        name="document" 
-                        value={formatCPF_CNPJ(from.document)}
-                        onChange={handleChange(setFrom)} 
-                        fullWidth 
-                        margin="dense" 
-                        required 
-                        inputProps={{ maxLength: 18 }}
-                    />
+                    <TextField label="CPF/CNPJ *" name="document" value={formatCPF_CNPJ(from.document)} onChange={handleChange(setFrom)} fullWidth margin="dense" required inputProps={{ maxLength: 18 }} />
                     <TextField label="Email *" name="email" value={from.email} onChange={handleChange(setFrom)} fullWidth margin="dense" required />
                     <TextField label="Telefone *" name="phone" value={formatPhone(from.phone)} onChange={handleChange(setFrom)} fullWidth margin="dense" required inputProps={{maxLength: 15}} />
                 </Box>
                 <Box>
                     <Typography variant="subtitle1" gutterBottom>Destinatário (Destino)</Typography>
-                    <TextField label="Nome/Razão Social *" name="name" value={to.name} onChange={handleChange(setTo)} fullWidth margin="dense" required />
-                    <TextField 
-                        label="CPF/CNPJ" 
-                        name="document" 
-                        value={formatCPF_CNPJ(to.document)}
-                        onChange={handleChange(setTo)} 
-                        fullWidth 
-                        margin="dense" 
-                        inputProps={{ maxLength: 18 }}
-                    />
+                    <TextField label="Nome Completo *" name="name" value={to.name} onChange={handleChange(setTo)} fullWidth margin="dense" required />
+                    <TextField label="CPF/CNPJ" name="document" value={formatCPF_CNPJ(to.document)} onChange={handleChange(setTo)} fullWidth margin="dense" inputProps={{ maxLength: 18 }} />
                     <TextField label="Email *" name="email" value={to.email} onChange={handleChange(setTo)} fullWidth margin="dense" required />
                     <TextField label="Telefone" name="phone" value={formatPhone(to.phone)} onChange={handleChange(setTo)} fullWidth margin="dense" inputProps={{maxLength: 15}} />
                     <TextField label="Endereço *" name="address" value={to.address} onChange={handleChange(setTo)} fullWidth margin="dense" required />
